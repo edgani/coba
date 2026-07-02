@@ -21,11 +21,15 @@ from warroom import price_action as PA
 from warroom import structure as ST
 from warroom import rotation as ROT
 from warroom import cycle_rotation as CR
+from warroom import causal_chain as CCH
 from warroom import thesis_beta as TB
+from warroom import fair_value as FV
 from warroom import beta_play as BP
 from warroom import themes as TH
 from warroom import secular_map as SEC
 from warroom import optimal_entry as OE
+from warroom import decision_center as DC
+from warroom import tracker as TR
 
 _DATADIR = os.path.join(os.path.dirname(__file__), "..", "data")
 
@@ -157,7 +161,9 @@ def _rank(us, regime):
         rows.append({"ticker": t, "_dir": direction, "score": round(max(strength, 0) * 10, 2),
                      "formation": form, "rs63": round(rs63 * 100, 1), "accel": round(accel * 100, 1),
                      "accumulation": _accum(d), "crowding": round(crowding * 100, 1), "vol": round(vol, 2),
-                     "vol_state": vstate, "lrr": lrr, "trr": trr, "trend_band": tr_band, "close": round(float(c.iloc[-1]), 2)})
+                     "vol_state": vstate, "lrr": lrr, "trr": trr, "trend_band": tr_band,
+                     "_rr_full": rr if isinstance(rr, dict) and "trade" in rr else None,
+                     "close": round(float(c.iloc[-1]), 2)})
     rows.sort(key=lambda x: x["score"], reverse=True)
     return rows
 
@@ -222,6 +228,7 @@ def _setups(prices, bench_t=None, names=None, n=8, long_only=False):
                 rr.get("trade", {}).get("phase"), rr.get("trend", {}).get("phase"), rr.get("tail", {}).get("phase")))
         rows.append({"ticker": t, "_dir": direction, "px": px, "entry": entry, "stop": stop, "target": target,
                      "lrr": tl, "trr": th, "close": px, "trend_band": (nl, nh),
+                     "_rr_full": rr if isinstance(rr, dict) and "trade" in rr else None,
                      "rs": round(rs * 100, 1), "accel": round(acc * 100, 1), "form": form, "conf": conf, "score": round(max(strength, 0) * 10, 1)})
     rows.sort(key=lambda x: (x["_dir"] != "Watch", x["score"]), reverse=True)
     return rows[:n]
@@ -390,6 +397,9 @@ def run(us, idx, crypto, fx, commo, fred=None, feeds=None):
     pool.sort(key=lambda x: x["score"], reverse=True)
     out["ranked"] = len(pool)
     out["conviction"] = pool[:5]
+    # Fair Value (FREE data via yfinance) for top US-listed conviction names — fills the Company Page
+    _us_conv = [r.get("ticker") for r in out["conviction"] if r.get("ticker") and "." not in r["ticker"] and "-USD" not in r["ticker"]]
+    out["fair_value"] = _try(lambda: FV.for_names(_us_conv, limit=6)) or {}
     out["watchlist"] = pool[5:14]
     allpx = {}
     for dd in (us, idx, crypto, fx, commo):
@@ -419,6 +429,13 @@ def run(us, idx, crypto, fx, commo, fred=None, feeds=None):
     out["market_character"] = _try(lambda: PA.market_character(allpx, "SPY"))
     out["rotation"] = _try(lambda: ROT.compute(allpx)) or {}
     out["cycle_rotation"] = _try(lambda: CR.compute(allpx)) or {}
+    out["causal_chains"] = _try(lambda: CCH.compute(allpx)) or []
+    # global country-regime grid (real price-proxy quads; borrowed layout, not fabricated labels)
+    from warroom import country_regime as CRG
+    out["country_regime"] = _try(lambda: CRG.build(us, commo)) or {}
+    # composite meters from price proxies + funding (replaces stubbed 'needs data feed')
+    from warroom import meters as MET
+    out["meters_computed"] = _try(lambda: MET.compute_all(us, fred, out.get("fair_value"))) or {}
     out["beta_plays"] = _try(lambda: BP.analyze_themes(allpx)) or {}
     out["thesis_beta"] = _try(lambda: TB.compute(allpx, out.get("beta_plays") or {})) or {}
     out["theme_graph"] = _try(lambda: TH.connect_dots(allpx)) or {}
@@ -487,25 +504,48 @@ def run(us, idx, crypto, fx, commo, fred=None, feeds=None):
         if stc:
             s["structure"] = stc
 
+    # decision package (LEVEL 8 — spec approach: multi-entry, 5 stops, T1-T3, causal invalidation,
+    # calibrated-or-silent P(win)). Replaces the old hardcoded stop/target + score-mapped P(win).
+    _chains = out.get("causal_chains") or []
+    try:
+        _open_tk = {p.get("ticker") for p in (TR.open_positions() or [])}
+    except Exception:
+        _open_tk = set()
+
+    def _decide(s):
+        try:
+            mc = None
+            fv = (out.get("fair_value") or {}).get(s.get("ticker"))
+            if isinstance(fv, dict):
+                mc = fv.get("market_cap")
+            s["decision_pkg"] = DC.build(s, reg, chains=_chains, open_tickers=_open_tk,
+                                         market_cap=mc, conviction=int(s.get("score", 50)))
+        except Exception as e:
+            _DIAG.append({"engine": "decision_center.py", "error": f"{type(e).__name__}: {str(e)[:120]}"})
+
     _mkt = {"us_lens": "US", "crypto": "Crypto", "commo": "Commodities", "fx": "FX", "idx": "IHSG"}
     for _key, _mk in _mkt.items():
         for s in (out.get(_key, {}).get("setups") or []):
-            _tag(s, _mk)
+            _tag(s, _mk); _decide(s)
     for s in out.get("conviction", []):
-        _tag(s, s.get("market", ""))
+        _tag(s, s.get("market", "")); _decide(s)
     # walk-forward + Monte-Carlo 100x gatekeeper (anti-overfit) on conviction setups
     vset = {r["ticker"]: {"ticker": r["ticker"], "direction": r["_dir"], "entry": r["px"], "stop": r["stop"], "target": r["target"]}
             for r in out["conviction"] if r["_dir"] in ("Long", "Short") and r["ticker"] in allpx}
-    gate = _try(lambda: __import__("engines.walkforward_backtest_engine", fromlist=["batch_gatekeeper"]).batch_gatekeeper(list(vset), allpx, vset, None)) or {}
+    # REAL walk-forward gatekeeper (was random.uniform — replaced with path-dependent backtest)
+    from warroom import backtest as BT
+    gate = _try(lambda: BT.batch_gatekeeper_real(list(vset), allpx, vset)) or {}
     if isinstance(gate, dict):
         for r in out["conviction"]:
             g = gate.get(r["ticker"])
             if isinstance(g, dict):
-                r["gate"] = {"status": g.get("gate_status"), "score": g.get("combined_gate_score"),
-                             "wf": g.get("walkforward_score"), "mc": g.get("mc_score"),
-                             "stop_adj": g.get("optimal_stop_adj"), "target_adj": g.get("optimal_target_adj")}
+                r["gate"] = {"status": g.get("gate_status"), "score": g.get("hit_rate"),
+                             "hit": g.get("hit_rate"), "expectancy": g.get("expectancy_pct"),
+                             "pf": g.get("profit_factor"), "boot_p": g.get("boot_p"),
+                             "wf_consistency": g.get("wf_hit_consistency"), "n_closed": g.get("n_closed")}
         out["validation"] = {"checked": len(vset),
-                             "passed": sum(1 for g in gate.values() if isinstance(g, dict) and g.get("gate_status") == "PASS")}
+                             "passed": sum(1 for g in gate.values() if isinstance(g, dict) and g.get("gate_status") == "PASS"),
+                             "method": "real path-dependent walk-forward + bootstrap"}
     else:
         out["validation"] = {"checked": 0, "passed": 0}
     # funding nudge
@@ -528,6 +568,30 @@ def run(us, idx, crypto, fx, commo, fred=None, feeds=None):
     # OPTIMAL ENTRY — consolidate tagged setups (risk range + timing) into a ranked entry view.
     # Runs LAST so every setup already carries its timing/decision tags from the _tag loop above.
     out["optimal_entry"] = _try(lambda: OE.gather(out)) or {}
+    # DECISION MARKET — group conviction names by thesis → efficient frontier (max-EV/min-risk/max-convexity)
+    def _decision_market():
+        from warroom import market_cap_target as MC
+        from collections import defaultdict
+        buckets = defaultdict(list)
+        fvmap = out.get("fair_value") or {}
+        for r in out.get("conviction", []):
+            if r.get("_dir") not in ("Long", "Short"):
+                continue
+            tk = r["ticker"]
+            thk = MC.thesis_for(tk)
+            mc = (fvmap.get(tk) or {}).get("market_cap")
+            buckets[thk].append({"ticker": tk, "price": _f(r.get("close") or r.get("px")),
+                                 "market_cap": mc, "conviction": int(r.get("score", 50)),
+                                 "direction": r.get("_dir"), "thesis_key": thk})
+        markets = {}
+        for thk, cands in buckets.items():
+            if len(cands) < 1:
+                continue
+            dm = MC.decision_market(cands)
+            if dm.get("candidates"):
+                markets[thk] = dm
+        return markets
+    out["decision_market"] = _try(_decision_market) or {}
     return out
 
 

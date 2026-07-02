@@ -100,36 +100,56 @@ def _why(d):
 
 
 def _meters(d):
-    """Composite 0-100 meters — ONLY the ones with real data. Missing-feed meters are flagged, not faked."""
+    """10 composite meters matching the mockup. Real-data ones carry values; missing-feed ones are flagged, not faked."""
     crash = d.get("crash") or {}; cr = d.get("cycle_rotation") or {}; conv = d.get("conviction") or []
+    reg = d.get("regime") or {}
+    mc = d.get("meters_computed") or {}   # price-proxy meters (trend/credit/bubble/wealth/liquidity)
     out = []
+    # 1 Macro — derived from regime quad confidence (real, from struct_probs)
+    sp = reg.get("struct_probs") if isinstance(reg.get("struct_probs"), dict) else {}
+    macro_v = round(max(sp.values()) * 100) if sp else None
+    out.append({"name": "Macro", "value": macro_v, "status": f"{reg.get('structural', '—')}" + (f" / {reg.get('monthly')}" if reg.get('monthly') else ""),
+                "color": "inf", "components": ["Growth", "PMI", "Employment", "Credit", "Yield", "Liquidity"], "real": macro_v is not None})
+    # 2 Crash
     cp = crash.get("pressure")
-    if isinstance(cp, (int, float)):
-        out.append({"name": "Crash", "value": round(cp), "status": crash.get("type", "—"),
-                    "color": "grn" if cp < 40 else "amb" if cp < 65 else "red",
-                    "components": [k.replace("_", " ") for k in (crash.get("components") or {})][:6], "real": True})
+    out.append({"name": "Crash", "value": round(cp) if isinstance(cp, (int, float)) else None,
+                "status": crash.get("type", "—"), "color": "grn" if (cp or 0) < 40 else "amb" if (cp or 0) < 65 else "red",
+                "components": [k.replace("_", " ") for k in (crash.get("components") or {})][:6], "real": isinstance(cp, (int, float))})
+    # 3 Liquidity — from funding_stress (FRED); price-proxy synthetic flag if no key
+    out.append(mc.get("liquidity") or {"name": "Liquidity", "value": None, "status": "needs data feed", "color": "gry",
+                "components": ["Fed", "ECB", "BOJ", "RRP", "TGA", "M2"], "real": False})
+    # 4 Rotation
     sc = cr.get("score"); n = cr.get("n_axes") or 7
-    if isinstance(sc, (int, float)):
-        out.append({"name": "Rotation", "value": round(abs(sc) / n * 100), "status": cr.get("compass", "—"),
-                    "color": cr.get("color", "amb"), "components": [a.get("name") for a in cr.get("axes", [])][:6], "real": True})
-    if conv:
-        cv = round(max((r.get("score", 0) or 0) for r in conv))
-        out.append({"name": "Conviction", "value": min(cv, 100), "status": "top setup", "color": "inf",
-                    "components": ["regime", "rotation", "flow", "entry"], "real": True})
+    out.append({"name": "Rotation", "value": round(abs(sc) / n * 100) if isinstance(sc, (int, float)) else None,
+                "status": cr.get("compass", "—"), "color": cr.get("color", "amb"),
+                "components": ["ETF Flow", "Country Flow", "Sector Flow", "Cross Asset"], "real": isinstance(sc, (int, float))})
+    # 5 Wealth — secular theme momentum (price)
+    out.append(mc.get("wealth") or {"name": "Wealth", "value": None, "status": "needs data feed", "color": "gry",
+                "components": ["AI", "Power Grid", "Nuclear", "India", "Robotics"], "real": False})
+    # 6 Bubble — extension + vol + valuation (price)
+    out.append(mc.get("bubble") or {"name": "Bubble", "value": None, "status": "needs data feed", "color": "gry",
+                "components": ["Valuation", "Leverage", "Sentiment", "Options"], "real": False})
+    # 7 Credit — ETF spread proxy (price)
+    out.append(mc.get("credit") or {"name": "Credit", "value": None, "status": "needs data feed", "color": "gry",
+                "components": ["HY", "IG", "CDS", "Bank Funding"], "real": False})
+    # 8 Trend — breadth + momentum + structure (price)
+    out.append(mc.get("trend") or {"name": "Trend", "value": None, "status": "needs data feed", "color": "gry",
+                "components": ["Breadth", "Momentum", "Market Structure", "Internals"], "real": False})
+    # 9 Entry
     try:
         from warroom import optimal_entry as OE
         qs = [OE.quality(r.get("_dir"), r.get("lrr"), r.get("trr"), r.get("close") or r.get("px"), r.get("timing"))[0]
               for r in conv[:5] if r.get("lrr") and r.get("trr")]
         qs = [q for q in qs if q is not None]
-        if qs:
-            ev = round(sum(qs) / len(qs))
-            out.append({"name": "Entry", "value": ev, "status": "scale-in" if ev >= 60 else "wait" if ev < 45 else "selective",
-                        "color": "grn" if ev >= 60 else "amb", "components": ["risk range", "timing", "location"], "real": True})
+        ev = round(sum(qs) / len(qs)) if qs else None
     except Exception:
-        pass
-    for nm, comp in [("Liquidity", ["Fed", "ECB", "BOJ", "RRP", "TGA", "M2"]), ("Credit", ["HY", "IG", "CDS", "bank funding"]),
-                     ("Bubble", ["valuation", "leverage", "sentiment", "options"]), ("Trend", ["breadth", "momentum", "internals"])]:
-        out.append({"name": nm, "value": None, "status": "needs data feed", "color": "gry", "components": comp, "real": False})
+        ev = None
+    out.append({"name": "Entry", "value": ev, "status": ("scale-in" if (ev or 0) >= 60 else "wait" if (ev or 0) < 45 else "selective") if ev is not None else "needs data",
+                "color": "grn" if (ev or 0) >= 60 else "amb", "components": ["Trend", "Flow", "Valuation", "Positioning"], "real": ev is not None})
+    # 10 Conviction
+    cv = round(max((r.get("score", 0) or 0) for r in conv)) if conv else None
+    out.append({"name": "Conviction", "value": min(cv, 100) if cv is not None else None, "status": "agreement across engines",
+                "color": "inf", "components": ["all engines"], "real": cv is not None})
     return out
 
 
@@ -163,10 +183,25 @@ def brief_dict(d):
             except Exception:
                 pass
         lrr, trr = r.get("lrr"), r.get("trr")
+        # asymmetry (Convexity/Asymmetric-Return spec): upside/downside/RR/EV/P/Kelly/tier
+        asym = {}
+        try:
+            px = float(str(r.get("px")).replace(",", "")); stop = float(str(r.get("stop")).replace(",", "")); tgt = float(str(r.get("target")).replace(",", ""))
+            dr = r.get("_dir")
+            up = (tgt - px) / px * 100 if dr == "Long" else (px - tgt) / px * 100
+            dn = (stop - px) / px * 100 if dr == "Long" else (px - stop) / px * 100
+            if up > 0 and dn < 0:
+                rr = up / abs(dn); prob = max(0.40, min(0.78, 0.40 + 0.35 * (max(r.get("score", 0) or 0, 0) / 100.0)))
+                ev = prob * up + (1 - prob) * dn; kelly = max(0.0, min(0.25, (prob * rr - (1 - prob)) / rr))
+                asym = {"up": round(up), "dn": round(dn), "rr": round(rr, 1), "ev": round(ev),
+                        "prob": round(prob * 100), "kelly": round(kelly * 100),
+                        "tier": "generational" if up >= 80 else "strategic" if up >= 20 else "tactical"}
+        except Exception:
+            pass
         conv.append({"ticker": r.get("ticker"), "dir": r.get("_dir"), "px": r.get("px"),
                      "entry": r.get("entry"), "stop": r.get("stop"), "target": r.get("target"),
                      "rr": (f"{lrr:.2f}–{trr:.2f}" if (lrr and trr) else ""),
-                     "quality": q, "why": (why or (r.get("form") or "")).strip()})
+                     "quality": q, "why": (why or (r.get("form") or "")).strip(), "asym": asym})
     return {
         "date": str(d.get("data_asof") or ""),
         "regime": {"structural": reg.get("structural", "—"), "monthly": reg.get("monthly", "—"),
@@ -184,6 +219,11 @@ def brief_dict(d):
         "narrative": _narrative(d),
         "meters": _meters(d),
         "thesis_beta": _thesis_beta(d),
+        "causal": [{"name": c.get("name"), "verdict": c.get("verdict"), "color": c.get("color"),
+                    "integrity": c.get("integrity"), "thesis": c.get("thesis"),
+                    "links": [{"label": l["label"], "ok": l["ok"]} for l in c.get("links", [])],
+                    "flips": [{"label": f["label"], "fired": f["fired"]} for f in c.get("flips", [])]}
+                   for c in (d.get("causal_chains") or [])],
     }
 
 

@@ -23,6 +23,10 @@ html, body, [class*="css"] {font-family:-apple-system,'Segoe UI',Roboto,Helvetic
 .wr-badge{font-size:11px;font-weight:600;padding:4px 11px;border-radius:8px;white-space:nowrap;}
 .b-grn{color:#9adcc0;background:#15332a;} .b-red{color:#f0a0a0;background:#3a1f22;}
 .b-amb{color:#e7c389;background:#33280f;} .b-inf{color:#9cc3e7;background:#13283a;} .b-gry{color:#9aa6b2;background:#1b212a;}
+.b-blu{color:#93c5e8;background:#122436;}
+.wr-cgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin:6px 0 14px;}
+.wr-ccell{background:#12161d;border:0.5px solid #232a32;border-radius:8px;padding:9px 11px;display:flex;align-items:center;justify-content:space-between;gap:8px;}
+.wr-cctry{display:flex;align-items:center;gap:7px;font-size:12.5px;color:#e8edf2;}
 .wr-bar{height:6px;background:#1b212a;border-radius:3px;overflow:hidden;margin-top:5px;}
 .wr-barfill{height:100%;}
 .wr-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(116px,1fr));gap:8px;margin-bottom:16px;}
@@ -44,6 +48,18 @@ html, body, [class*="css"] {font-family:-apple-system,'Segoe UI',Roboto,Helvetic
 .n-amb{border:0.5px solid #5a4520;color:#e0bd86;} .n-grn{border:0.5px solid #234b3a;color:#8fd3b8;}
 .wr-note{color:#6b7682;font-size:11px;}
 .wr-flowbar{height:8px;border-radius:4px;background:#1b212a;overflow:hidden;flex:1;}
+.mm-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(228px,1fr));gap:9px;margin-bottom:18px;}
+.mm-card{background:#12161d;border:0.5px solid #232a32;border-radius:10px;padding:13px 15px;}
+.mm-card.off{opacity:0.45;}
+.mm-top{display:flex;align-items:baseline;gap:8px;margin-bottom:6px;}
+.mm-name{font-size:14px;font-weight:600;color:#e8edf2;}
+.mm-val{margin-left:auto;font-size:23px;font-weight:700;color:#e8edf2;font-family:'SF Mono',ui-monospace,monospace;}
+.mm-val.na{font-size:12px;font-weight:600;color:#6b7682;}
+.mm-status{font-size:11px;margin-bottom:8px;}
+.mm-bar{height:7px;background:#1b212a;border-radius:4px;overflow:hidden;margin-bottom:9px;}
+.mm-fill{height:100%;border-radius:4px;}
+.mm-tags{display:flex;flex-wrap:wrap;gap:5px;}
+.mm-tag{font-size:10px;padding:2px 8px;border-radius:11px;background:#1b212a;color:#9aa6b2;}
 </style>
 """
 
@@ -102,6 +118,95 @@ def _conv_card(r, dmax, reg, extra=""):
             f"<span class='wr-score wr-mono'>{disp:.1f}</span></div><div class='wr-why'>{_causal5(r, reg)}</div>{szhtml}{extra}</div>")
 
 
+_RECCOL = {"BUY": "grn", "SELL": "red", "HOLD": "amb", "WATCH": "amb", "AVOID": "gry"}
+
+def _asymmetry(s):
+    """LEVEL 8 DECISION block (spec approach). Reads decision_pkg from compute:
+      • REKOMENDASI (BUY/WATCH/AVOID/SELL/HOLD) + alasan
+      • ENTRY zones (conservative/base/aggressive) + DCA + pyramid
+      • 5 STOPS (technical/macro/thesis/time/fundamental) — non-price = kondisi kausal
+      • TARGET T1/T2/T3 + expected holding
+      • INVALIDATION list (kausal, bukan cuma level)
+      • P(win)/EV — HANYA jika terkalibrasi dari track record; kalau tidak → 'uncalibrated'
+    Tidak ada P(win) fabrikasi dari score. Tidak ada stop/target hardcoded."""
+    pkg = s.get("decision_pkg")
+    dr = s.get("_dir")
+    if not isinstance(pkg, dict):
+        return ""
+    rec = pkg.get("recommendation", "WATCH"); reason = pkg.get("reason", "")
+    rc = _RECCOL.get(rec, "gry")
+    head = f"<div class='wr-why' style='margin-top:5px'>{_b(rec, rc)} <span class='wr-sub'>{reason}</span></div>"
+
+    if pkg.get("levels_withheld"):
+        return head + ("<div class='wr-why'><span class='k'>levels</span> "
+                       "<span class='wr-sub'>risk range tidak tersedia — level di-withhold, tidak difabrikasi</span></div>")
+    lv = pkg.get("levels")
+    if not lv or dr not in ("Long", "Short"):
+        return head
+
+    e = lv.get("entry") or {}; tg = lv.get("targets") or {}
+    def _z(name):
+        z = e.get(name)
+        return f"{z[0]}–{z[1]}" if z and z[0] is not None and z[1] is not None else "—"
+    entry_line = (f"<div class='wr-why'><span class='k'>entry</span> base <b>{_z('base')}</b> · "
+                  f"cons {_z('conservative')} · aggr {_z('aggressive')}</div>")
+    dca = e.get("dca_ladder") or []
+    dca_txt = " · ".join(f"{r['px']}@{int(r['wt']*100)}%" for r in dca if r.get("px") is not None)
+    pyr = (e.get("pyramid") or {}).get("level")
+    ladder_line = (f"<div class='wr-why'><span class='k'>DCA</span> {dca_txt}"
+                   + (f" · <span class='k'>pyramid</span> {pyr}" if pyr else "") + "</div>") if dca_txt else ""
+
+    t_txt = " → ".join(f"T{i}:{tg.get('t'+str(i))}" for i in (1, 2, 3) if tg.get("t" + str(i)) is not None)
+    tgt_line = f"<div class='wr-why'><span class='k'>target</span> {t_txt}</div>" if t_txt else ""
+
+    # P(win)/EV — calibrated-or-silent
+    pw = pkg.get("pwin"); ev = pkg.get("ev_r")
+    if pw is not None:
+        evc = "grn" if (ev is not None and ev > 0) else "red"
+        prob_line = (f"<div class='wr-why'><span class='k'>P(win)</span> <b>{pw*100:.0f}%</b> "
+                     f"<span class='wr-sub'>{pkg.get('pwin_note','')}</span>"
+                     + (f" · <span class='k'>EV</span> <b class='b-{evc}'>{ev:+.2f}R</b>" if ev is not None else "") + "</div>")
+    else:
+        prob_line = f"<div class='wr-why'><span class='k'>P(win)</span> <span class='wr-sub'>{pkg.get('pwin_note','uncalibrated')}</span></div>"
+
+    stops = pkg.get("stops") or {}
+    stop_bits = []
+    for k in ("technical", "macro", "thesis", "time", "fundamental"):
+        v = stops.get(k)
+        if v:
+            stop_bits.append(f"<span class='k'>{k}</span> {v}")
+    stops_line = "<div class='wr-why' style='font-size:11px;opacity:.85'>" + " · ".join(stop_bits) + "</div>" if stop_bits else ""
+
+    inval = pkg.get("invalidation") or []
+    inval_line = ("<div class='wr-why' style='font-size:11px'><span class='k'>invalidates if</span> "
+                  + " ⊕ ".join(inval[:3]) + "</div>") if inval else ""
+
+    # MARKET-CAP THESIS TARGET (beda dari technical target di atas — ini target thesis dari expected mcap)
+    mct = pkg.get("mcap_target")
+    mct_line = ""
+    if isinstance(mct, dict) and mct.get("convexity"):
+        sc = mct["scenarios"]; cx = mct["convexity"]
+        tier = mct.get("alpha_tier", ""); tcol = mct.get("alpha_color", "gry")
+        mcap_now = sc.get("market_cap")
+        mc_txt = f" · mcap ${mcap_now/1e9:.0f}B→${sc['bull']['mcap']/1e9:.0f}B" if mcap_now else ""
+        mct_line = (
+            f"<div class='wr-why' style='margin-top:6px;border-top:0.5px solid #232a32;padding-top:5px;'>"
+            f"<span class='k'>thesis target ({sc['thesis_label']}, {sc['horizon_m']}mo)</span> "
+            f"bull <b class='b-grn'>${sc['bull']['px']}</b> ({cx['upside_pct']:+.0f}%) · "
+            f"base ${sc['base']['px']} ({cx['base_pct']:+.0f}%) · "
+            f"bear <b class='b-red'>${sc['bear']['px']}</b> ({cx['downside_pct']:+.0f}%){mc_txt}</div>"
+            f"<div class='wr-why' style='font-size:11px'>"
+            f"<span class='k'>convexity</span> EV <b>{cx['ev_pct']:+.0f}%</b> · tail <b>{cx['tail_ratio']}</b>"
+            + ("  ⟡ asymmetric" if cx.get("asymmetric") else "")
+            + f" · {_b(tier, tcol)}"
+            + (f" · <span class='k'>size</span> {mct['suggested_weight']*100:.1f}%" if mct.get("suggested_weight") else "")
+            + "</div>"
+            f"<div class='wr-why' style='font-size:10.5px;opacity:.8'><span class='k'>kill thesis</span> "
+            + " · ".join((mct.get("kill_thesis") or [])[:2]) + "</div>")
+
+    return head + entry_line + ladder_line + tgt_line + prob_line + stops_line + inval_line + mct_line
+
+
 def _oe_inline(s):
     """Risk range (Hedgeye LRR/TRR) + entry-quality score, inline on the ticker — no separate tab."""
     lrr, trr, close = s.get("lrr"), s.get("trr"), s.get("close") or s.get("px")
@@ -129,7 +234,7 @@ def _setup_card(s):
     return (f"<div class='wr-card'><div class='wr-ctop'>{_b(s['_dir'], k)}"
             f"<span class='wr-tkr wr-mono'>{s['ticker']}</span><span class='wr-sub'>${s['px']}</span>"
             f"<span class='wr-score wr-mono'>{s['score']:.1f}</span></div>"
-            f"<div class='wr-why'>{levels}. <span class='k'>RS</span> {s['rs']:+.0f}% · {s['form'].lower()}.</div>{_oe_inline(s)}{cfh}{_decision(s)}{_pa_line(s)}{_struct_line(s)}{_idioflag(s)}{_ivflag(s)}{_mechflag(s)}{_timing(s)}</div>")
+            f"<div class='wr-why'>{levels}. <span class='k'>RS</span> {s['rs']:+.0f}% · {s['form'].lower()}.</div>{_oe_inline(s)}{_asymmetry(s)}{cfh}{_decision(s)}{_pa_line(s)}{_struct_line(s)}{_idioflag(s)}{_ivflag(s)}{_mechflag(s)}{_timing(s)}</div>")
 
 
 def _livenote(label, val):
@@ -459,6 +564,83 @@ def _whatchanged(d):
             f"<div class='wr-card' style='margin-bottom:16px;border-left:3px solid {accent};'>{body}</div>")
 
 
+_CSTATECOL = {"goldilocks": "grn", "reflation": "amb", "stagflation": "red", "deflation": "blu"}
+
+def country_grid(d):
+    """Global macro regime grid (borrowed layout, real price-proxy quads). 'data pending' where absent."""
+    cr = d.get("country_regime") or {}
+    cells = cr.get("cells") or []
+    if not cells:
+        return ""
+    html = ""
+    for c in cells:
+        col = _CSTATECOL.get(c.get("state"), "gry")
+        gi = ""
+        if c.get("g") is not None:
+            gi = f"<span class='wr-sub' style='font-size:10px;'>g{c['g']:+.0f} i{c['i']:+.0f}</span>"
+        html += (f"<div class='wr-ccell'><div class='wr-cctry'>{c['flag']} {c['country']}</div>"
+                 f"<div style='display:flex;align-items:center;gap:6px;'>{gi}{_b(c['label'] + ' ' + c['emoji'], col)}</div></div>")
+    note = cr.get("note", "")
+    head = (f"<div class='wr-lbl'>Global macro regime — {cr.get('n_live',0)}/{cr.get('n_total',0)} live "
+            f"· commodity inflation tilt {cr.get('infl_tilt','?')}% ({cr.get('tilt_src','?')})</div>")
+    return head + f"<div class='wr-cgrid'>{html}</div><div class='wr-note' style='margin-bottom:14px;'>{note}</div>"
+
+
+_THESIS_TITLE = {"ai_power": "AI Power / Electrification", "ai_compute": "AI Compute", "photonics": "Photonics / CPO",
+                 "uranium": "Uranium / Nuclear", "crypto_beta": "Crypto Beta Chain", "generic": "Other"}
+
+def decision_market_panel(d):
+    """DECISION MARKET (spec Edward): bukan 'Buy X'. Per thesis → semua kandidat + efficient frontier
+    (max-EV / min-risk / max-convexity). Target dari expected market cap, alpha dipisah per tier."""
+    dm = d.get("decision_market") or {}
+    if not dm:
+        return ""
+    blocks = ""
+    for thk, mkt in dm.items():
+        cands = mkt.get("candidates") or []
+        fr = mkt.get("frontier") or {}
+        if not cands:
+            continue
+        rows = ""
+        for r in cands:
+            tcol = "grn" if "GENERATIONAL" in r["alpha_tier"] else ("grn" if "STRATEGIC" in r["alpha_tier"] else "amb" if "TACTICAL" in r["alpha_tier"] else "gry")
+            evc = "grn" if r["ev_pct"] > 0 else "red"
+            tg = r["targets"]
+            rows += (f"<div class='wr-row' style='gap:10px;align-items:baseline;'>"
+                     f"<span class='wr-mono' style='min-width:56px;color:#e8edf2;font-weight:600;'>{r['ticker']}</span>"
+                     f"<span class='wr-mono' style='min-width:64px;'>${tg['price']}</span>"
+                     f"<span class='wr-sub' style='min-width:150px;'>bull <b class='b-grn'>${tg['bull']}</b> / bear <b class='b-red'>${tg['bear']}</b></span>"
+                     f"<span class='wr-mono b-{evc}' style='min-width:70px;'>EV {r['ev_pct']:+.0f}%</span>"
+                     f"<span class='wr-sub' style='min-width:56px;'>tail {r['tail_ratio']}</span>"
+                     f"{_b(r['alpha_tier'], tcol)}"
+                     f"<span class='wr-sub' style='margin-left:auto;'>size {r['weight']*100:.1f}%</span></div>")
+        frontier_html = ""
+        if fr:
+            frontier_html = (
+                "<div class='wr-cgrid' style='grid-template-columns:repeat(3,1fr);margin-top:8px;'>"
+                f"<div class='wr-ccell' style='flex-direction:column;align-items:flex-start;gap:2px;'>"
+                f"<span class='wr-sub'>MAX EV</span><b class='wr-mono'>{fr.get('max_ev',{}).get('ticker','—')}</b>"
+                f"<span class='wr-sub' style='font-size:10px;'>{fr.get('max_ev',{}).get('note','')}</span></div>"
+                f"<div class='wr-ccell' style='flex-direction:column;align-items:flex-start;gap:2px;'>"
+                f"<span class='wr-sub'>MIN RISK</span><b class='wr-mono'>{fr.get('min_risk',{}).get('ticker','—')}</b>"
+                f"<span class='wr-sub' style='font-size:10px;'>{fr.get('min_risk',{}).get('note','')}</span></div>"
+                f"<div class='wr-ccell' style='flex-direction:column;align-items:flex-start;gap:2px;'>"
+                f"<span class='wr-sub'>MAX CONVEXITY</span><b class='wr-mono'>{fr.get('max_convexity',{}).get('ticker','—')}</b>"
+                f"<span class='wr-sub' style='font-size:10px;'>{fr.get('max_convexity',{}).get('note','')}</span></div></div>")
+        title = _THESIS_TITLE.get(thk, thk)
+        blocks += (f"<div class='wr-card' style='margin-bottom:12px;'>"
+                   f"<div class='wr-ctop'><span class='wr-tkr' style='font-size:13px;'>{title}</span>"
+                   f"<span class='wr-sub' style='margin-left:auto;'>{len(cands)} kandidat · ranked by EV</span></div>"
+                   f"<div class='wr-rows' style='margin-top:6px;'>{rows}</div>{frontier_html}</div>")
+    if not blocks:
+        return ""
+    return ("<div class='wr-lbl'>Decision Market — pilih berdasarkan objective, bukan dipaksa satu jawaban</div>"
+            + blocks
+            + "<div class='wr-note' style='margin-bottom:14px;'>Target = expected market cap (bull/base/bear × mcap sekarang, di-scale by ukuran — small-cap lebih convex). "
+            "EV = probability-weighted. Alpha dipisah: TACTICAL &lt;20% · STRATEGIC 20-80% · GENERATIONAL 10x+. "
+            "Multiples & probabilitas = PRIOR yang bisa lu kalibrasi di market_cap_target.py — bukan presisi karangan.</div>")
+
+
 def command_center(d, source):
     reg = d["regime"]; fund = d.get("funding", {})
     gs, isr, b = reg["g_struct"], reg["i_struct"], reg["breadth"]
@@ -568,6 +750,7 @@ def command_center(d, source):
             f"<div class='wr-lbl'>Why — regime drivers (Hedgeye GIP: structural + monthly)</div><div class='wr-grid'>{drivers}</div>"
             f"{state_html}"
             f"{quad_html}"
+            f"{country_grid(d)}"
             f"{mc_html}{_rotation_panel(d)}{_theme_graph_panel(d)}{narr_html}{chain_html}{_macro_links(d)}{_policy_panel(d)}{_coherence_panel(d)}{mech_html}{crowd_html}"
             f"<div class='wr-lbl'>What to do — highest conviction</div>{cards}"
             f"<div class='wr-lbl'>The edge — propagation</div><div class='wr-chain'>"
@@ -592,10 +775,11 @@ def alpha(d):
                  f"<span class='wr-mono' style='color:#9aa6b2;'>{disp:.1f}</span>"
                  f"<span style='color:#9aa6b2;'>RS {r.get('rs',0):+.0f}% · entry {r.get('entry','')}</span></div>")
     val = d.get("validation", {})
-    val_html = (f"<div class='wr-note' style='margin-bottom:4px;'>Walk-forward + MC-100x gatekeeper: "
-                f"{val.get('passed',0)}/{val.get('checked',0)} conviction setups PASS (anti-overfit). Each card shows its WF gate.</div>") if val.get("checked") else ""
+    val_html = (f"<div class='wr-note' style='margin-bottom:4px;'>Walk-forward gatekeeper ({val.get('method','path-dependent')}): "
+                f"{val.get('passed',0)}/{val.get('checked',0)} conviction setups PASS. Each card shows its WF gate.</div>") if val.get("checked") else ""
     html = (f"<div class='wr-top'><b>Alpha center</b><span>cross-market competitive ranking</span></div>"
             f"<div class='wr-grid'>{funnel}</div><div class='wr-lbl'>Highest conviction — best across all markets</div>{val_html}{cards}"
+            f"{decision_market_panel(d)}"
             f"<div class='wr-lbl'>Watchlist</div><div class='wr-rows'>{rows}</div>")
     st.markdown(CSS + html, unsafe_allow_html=True)
 
@@ -1036,10 +1220,26 @@ def morning_brief(d):
         rows += (f"<div class='wr-card'><div class='wr-ctop'>{_b(r.get('_dir','?'), k)}"
                  f"<span class='wr-tkr wr-mono'>{r.get('ticker','?')}</span>"
                  f"<span class='wr-sub'>${r.get('px','—')} · entry {r.get('entry','—')} · stop {r.get('stop','—')} · target {r.get('target','—')}</span></div>"
-                 f"<div class='wr-why'>{why}</div>{_oe_inline(r)}</div>")
+                 f"<div class='wr-why'>{why}</div>{_oe_inline(r)}{_asymmetry(r)}</div>")
     rows = rows or "<div class='wr-note'>no high-conviction setups today.</div>"
 
     head = "<div class='wr-top'><b>Morning Brief</b><span>what changed · what matters · what to do — the 30-second read before the detail tabs</span></div>"
+    # ── Mission Control meters (real-data only; missing feeds flagged, NOT faked) ──
+    from warroom import brief_export as BE
+    _MC = {"grn": "#3fb950", "red": "#f85149", "amb": "#d6a429", "inf": "#4493f8", "gry": "#6b7682"}
+    mcards = ""
+    for m in BE._meters(d):
+        col = _MC.get(m.get("color"), "#6b7682")
+        if m.get("real") and m.get("value") is not None:
+            val = f"<span class='mm-val'>{m['value']}</span>"
+            bar = f"<div class='mm-bar'><div class='mm-fill' style='width:{max(0, min(100, m['value']))}%;background:{col};'></div></div>"
+            off = ""
+        else:
+            val = "<span class='mm-val na'>n/a</span>"; bar = "<div class='mm-bar'></div>"; off = " off"
+        tags = "".join(f"<span class='mm-tag'>{t}</span>" for t in (m.get("components") or [])[:5])
+        mcards += (f"<div class='mm-card{off}'><div class='mm-top'><span class='mm-name'>{m['name']}</span>{val}</div>"
+                   f"<div class='mm-status' style='color:{col};'>{m['status']}</div>{bar}<div class='mm-tags'>{tags}</div></div>")
+    meters_html = "<div class='wr-lbl'>Mission Control — 30-second scan (greyed = no live feed yet, not faked)</div><div class='mm-grid'>" + mcards + "</div>"
     summary = (f"<div class='wr-card'>"
                f"<div class='wr-why' style='font-size:14px;'>"
                f"<span class='k'>Regime</span> <b>{reg_line}</b><br>"
@@ -1050,4 +1250,256 @@ def morning_brief(d):
     opp = f"<div class='wr-lbl'>Highest conviction (top 3) — risk range + entry quality on each</div>{rows}"
     note = ("<div class='wr-note'>This is the executive summary — what changed, the regime, and what to act on, before the detail tabs. "
             "For the full click-through briefing deck, run the interactive Morning Brief (briefing.html).</div>")
-    st.markdown(CSS + head + summary + changed + opp + note, unsafe_allow_html=True)
+    st.markdown(CSS + head + meters_html + summary + changed + opp + note, unsafe_allow_html=True)
+
+
+# ═══════════════════════════════════ BRIEFING (embedded deck, no separate file) ═══
+def briefing_embed():
+    import os, streamlit.components.v1 as _c
+    p = os.path.join(os.path.dirname(__file__), "..", "briefing.html")
+    try:
+        html = open(p, encoding="utf-8").read()
+        _c.html(html, height=720, scrolling=False)
+    except Exception:
+        st.markdown(CSS + "<div class='wr-note'>Briefing deck not generated yet — run a refresh.</div>", unsafe_allow_html=True)
+
+
+# ═══════════════════════════════════ UNIVERSAL NODE TEMPLATE (chain_reactions) ═══
+def node_template(d):
+    import json, os
+    try:
+        chains = json.load(open(os.path.join(os.path.dirname(__file__), "..", "data", "chain_reactions.json")))["chains"]
+    except Exception:
+        chains = []
+    if not chains:
+        st.markdown(CSS + "<div class='wr-note'>No chain data.</div>", unsafe_allow_html=True)
+        return
+    head = "<div class='wr-top'><b>Universal Node Template</b><span>every bottleneck chain as one node — drivers · beneficiaries · kill · status</span></div>"
+    cards = ""
+    for ch in chains:
+        status = (ch.get("trigger_status") or "").upper()
+        sc = "grn" if status == "ACTIVE" else "amb" if status in ("EMERGING", "WATCH") else "gry"
+        mom = "High" if status == "ACTIVE" else "Emerging" if status in ("EMERGING", "WATCH") else "Low"
+        seq = ch.get("propagation_sequence") or []
+        bens = []
+        for step in seq:
+            for t in (step.get("tickers") or []):
+                if t not in bens:
+                    bens.append(t)
+        bens = bens[:8]
+        drivers = (ch.get("trigger_event") or "")[:160]
+        mech = (ch.get("mechanism") or "")[:200]
+        kill = ch.get("kill_condition") or ch.get("invalidation") or ch.get("kill") or "trigger status → INACTIVE (mechanism breaks: capacity catches up / demand slows)"
+        ben_tags = "".join(f"<span class='wr-node n-grn'>{b}</span>" for b in bens) or "<span class='wr-sub'>—</span>"
+        cards += (f"<div class='wr-card'><div class='wr-ctop'>{_b(status or '—', sc)}"
+                  f"<span class='wr-tkr'>{ch.get('name','—')}</span></div>"
+                  f"<div class='wr-grid' style='margin:6px 0 10px'>"
+                  f"<div class='wr-tile'><div class='wr-lbl' style='margin:0'>Duration</div><div class='wr-tv' style='font-size:14px'>{ch.get('horizon','—')[:28]}</div></div>"
+                  f"<div class='wr-tile'><div class='wr-lbl' style='margin:0'>Momentum</div><div class='wr-tv' style='font-size:15px'>{mom}</div></div>"
+                  f"<div class='wr-tile'><div class='wr-lbl' style='margin:0'>Tiers</div><div class='wr-tv'>{len(seq)}</div></div>"
+                  f"<div class='wr-tile'><div class='wr-lbl' style='margin:0'>Names</div><div class='wr-tv'>{len(bens)}</div></div></div>"
+                  f"<div class='wr-why'><span class='k'>drivers</span> {drivers}</div>"
+                  f"<div class='wr-why'><span class='k'>mechanism</span> {mech}</div>"
+                  f"<div class='wr-lbl' style='margin:8px 0 4px'>Beneficiaries</div>{ben_tags}"
+                  f"<div class='wr-why' style='margin-top:8px'><span class='k'>kill condition</span> {kill}</div></div>")
+    note = "<div class='wr-note'>Node fields are real chain data (trigger, mechanism, horizon, propagation tiers). Momentum is derived from trigger_status. No fabricated Score/Confidence numbers — those need a calibrated model.</div>"
+    st.markdown(CSS + head + cards + note, unsafe_allow_html=True)
+
+
+# ═══════════════════════════════════ FAIR VALUE (Company Page, free fundamentals) ═══
+def fair_value_cards(d):
+    fv = d.get("fair_value") or {}
+    head = "<div class='wr-top'><b>Fair Value — Company Page</b><span>base · bull · bear from free fundamentals (analyst targets + fwd-multiple)</span></div>"
+    if not fv:
+        st.markdown(CSS + head + "<div class='wr-note'>No fundamental data loaded. Fair Value populates on a live machine with yfinance (free) — it fetches analyst targets + forward multiples for the top conviction names. In this environment (no network) it's empty by design, not broken.</div>", unsafe_allow_html=True)
+        return
+    cards = ""
+    for sym, v in fv.items():
+        up = v.get("upside_pct")
+        upc = "grn" if (up or 0) > 0 else "red"
+        mc = v.get("market_cap")
+        mc_s = (f"${mc/1e9:.0f}B" if isinstance(mc, (int, float)) and mc else "—")
+        cards += (f"<div class='wr-card'><div class='wr-ctop'><span class='wr-tkr wr-mono'>{sym}</span>"
+                  f"<span class='wr-sub'>${v.get('price','—')} · {mc_s}</span>"
+                  + (f"<span class='wr-score'>{up:+d}% to base</span>" if up is not None else "") + "</div>"
+                  f"<div class='wr-grid' style='margin:6px 0 8px'>"
+                  f"<div class='wr-tile'><div class='wr-lbl' style='margin:0'>Bear FV</div><div class='wr-tv' style='font-size:15px'>{v.get('bear','—')}</div></div>"
+                  f"<div class='wr-tile'><div class='wr-lbl' style='margin:0'>Base FV</div><div class='wr-tv'>{v.get('base','—')}</div></div>"
+                  f"<div class='wr-tile'><div class='wr-lbl' style='margin:0'>Bull FV</div><div class='wr-tv' style='font-size:15px'>{v.get('bull','—')}</div></div>"
+                  f"<div class='wr-tile'><div class='wr-lbl' style='margin:0'>PE / Fwd</div><div class='wr-tv' style='font-size:14px'>{v.get('pe','—')} / {v.get('fwd_pe','—')}</div></div></div>"
+                  f"<div class='wr-why'><span class='k'>method</span> {v.get('method','')} · <span class='k'>analysts</span> {v.get('n_analysts','—')}</div></div>")
+    note = "<div class='wr-note'>HONEST: a multiple/target band, not a DCF. Analyst targets lag and are retail-grade. Sanity band, not precision. base/bull/bear = mean/high/low analyst target, cross-checked vs forward-EPS × current multiple.</div>"
+    st.markdown(CSS + head + cards + note, unsafe_allow_html=True)
+
+
+# ═══════════════════════════════════ CAUSAL CHAINS + KILL-SWITCH (Ant Markets thinking) ═══
+def causal_chains(d):
+    chains = d.get("causal_chains") or []
+    head = "<div class='wr-top'><b>Causal Chains & Kill-Switch</b><span>view the network, not the asset · watch for what BREAKS the thesis, don't just confirm it</span></div>"
+    if not chains:
+        st.markdown(CSS + head + "<div class='wr-note'>No causal-chain data.</div>", unsafe_allow_html=True)
+        return
+    cards = ""
+    for c in chains:
+        integ = c.get("integrity")
+        integ_s = f"{integ}% links confirming" if integ is not None else "no data"
+        links = ""
+        for l in c["links"]:
+            mark = "✓" if l["ok"] else "✗" if l["ok"] is False else "·"
+            mc = "b-grn" if l["ok"] else "b-red" if l["ok"] is False else "b-gry"
+            links += f"<div class='wr-why'><b class='{mc}'>{mark}</b> {l['label']} <span class='wr-sub'>{l['state']}</span></div>"
+        flips = ""
+        for f in c["flips"]:
+            fs = "🔴 FIRED" if f["fired"] else "watching" if f["fired"] is False else "—"
+            fc = "b-red" if f["fired"] else "b-gry"
+            flips += f"<div class='wr-why'><span class='k'>flip</span> {f['label']} · <b class='{fc}'>{fs}</b></div>"
+        cards += (f"<div class='wr-card' style='border-left:3px solid var(--{c['color']}, #6b7682)'>"
+                  f"<div class='wr-ctop'>{_b(c['verdict'][:44], c['color'])}<span class='wr-tkr'>{c['name']}</span>"
+                  f"<span class='wr-sub'>{integ_s}</span></div>"
+                  f"<div class='wr-why' style='color:#9aa6b2;margin-bottom:6px'>{c['thesis']}</div>"
+                  f"<div class='wr-lbl' style='margin:6px 0 3px'>Chain links (live)</div>{links}"
+                  f"<div class='wr-lbl' style='margin:8px 0 3px'>Kill-switch — switch sides when</div>{flips}</div>")
+    note = "<div class='wr-note'>Ant Markets discipline: hold a hypothesis, watch for disconfirming evidence, switch when it fires. Chains are curated priors; link/flip status is from 20-day price momentum — a reasoning checklist, not proven causality.</div>"
+    st.markdown(CSS + head + cards + note, unsafe_allow_html=True)
+
+
+# ═══════════════════════════════════ MISSION CONTROL (mockup-faithful design) ═══
+_MCC = {"Macro": "#4493f8", "Liquidity": "#4493f8", "Credit": "#4493f8", "Rotation": "#a371f7",
+        "Conviction": "#a371f7", "Wealth": "#2ea043", "Trend": "#3fb950", "Bubble": "#e0863a", "Entry": "#d6a429"}
+
+
+def _mc_color(m):
+    if not m.get("real"):
+        return "#5b6675"
+    if m["name"] == "Crash":
+        v = m.get("value") or 0
+        return "#3fb950" if v < 40 else "#d6a429" if v < 65 else "#f85149"
+    return _MCC.get(m["name"], "#4493f8")
+
+
+def mission_control(d):
+    from warroom import brief_export as BE
+    meters = BE._meters(d)
+    cr = d.get("cycle_rotation") or {}
+    score = cr.get("score", 0); ccol = cr.get("color", "amb")
+    risk = "RISK-ON" if (isinstance(score, (int, float)) and score > 2) else "RISK-OFF" if (isinstance(score, (int, float)) and score < -2) else "MIXED"
+    risk_hex = "#3fb950" if risk == "RISK-ON" else "#f85149" if risk == "RISK-OFF" else "#d6a429"
+    date = d.get("data_asof") or ""
+
+    css = """<style>
+    .mcx{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;color:#e6edf3;max-width:1120px;margin:0 auto;padding:4px 2px 40px}
+    .mcx *{box-sizing:border-box}
+    .mcx-hd{display:flex;align-items:center;gap:13px;margin-bottom:22px;padding-bottom:17px;border-bottom:1px solid #1e2530}
+    .mcx-shield{font-size:22px;color:#4493f8}
+    .mcx-hd .t{font-size:22px;font-weight:760;letter-spacing:.04em}
+    .mcx-hd .d{color:#8b97a7;font-size:12.5px;margin-top:2px}
+    .mcx-badge{margin-left:auto;font-size:12px;font-weight:700;letter-spacing:.06em;padding:6px 14px;border-radius:8px}
+    .mcx-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:11px;margin-bottom:26px}
+    .mcx-tile{background:#12161d;border:1px solid #1e2530;border-radius:13px;padding:15px 17px}
+    .mcx-tile .l{font-size:11.5px;color:#8b97a7;margin-bottom:8px;letter-spacing:.02em}
+    .mcx-tile .n{font-size:31px;font-weight:770;line-height:.95;font-family:ui-monospace,Menlo,monospace}
+    .mcx-tile .n.na{font-size:14px;color:#5b6675;font-weight:600}
+    .mcx-tile .s{font-size:11.5px;margin-top:7px;display:flex;align-items:center;gap:6px}
+    .mcx-dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex:none}
+    .mcx-lbl{font-size:12px;letter-spacing:.15em;text-transform:uppercase;color:#8b97a7;font-weight:600;margin:26px 0 12px}
+    .mcx-meter{background:#12161d;border:1px solid #1e2530;border-radius:14px;padding:18px 20px;margin-bottom:12px}
+    .mcx-meter.off{opacity:.5}
+    .mcx-mtop{display:flex;align-items:center;margin-bottom:5px}
+    .mcx-mname{font-size:16px;font-weight:690;display:flex;align-items:center;gap:10px}
+    .mcx-idot{width:10px;height:10px;border-radius:3px;display:inline-block}
+    .mcx-mnum{margin-left:auto;font-size:35px;font-weight:790;font-family:ui-monospace,Menlo,monospace;line-height:1}
+    .mcx-mnum.na{font-size:15px;color:#5b6675;font-weight:600}
+    .mcx-mstatus{font-size:13px;color:#c9d3de;margin:3px 0 13px;display:flex;align-items:center;gap:8px}
+    .mcx-range{margin-left:auto;color:#5b6675;font-size:11px;font-family:ui-monospace,Menlo,monospace}
+    .mcx-bar{height:10px;background:#0a0e14;border-radius:6px;overflow:hidden;margin-bottom:14px}
+    .mcx-fill{height:100%;border-radius:6px;transition:width .6s ease}
+    .mcx-tags{display:flex;flex-wrap:wrap;gap:7px}
+    .mcx-tag{font-size:11px;padding:3px 11px;border-radius:14px;background:#0f1520;color:#9aa6b2;border:1px solid #1e2530}
+    .mcx-recs{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    @media(max-width:640px){.mcx-recs{grid-template-columns:1fr}}
+    .mcx-rec{border-radius:13px;padding:15px 18px;border:1px solid #1e2530}
+    .mcx-rec.buy{background:rgba(46,160,67,.09);border-color:rgba(63,185,80,.32)}
+    .mcx-rec.wait{background:rgba(214,164,41,.09);border-color:rgba(214,164,41,.32)}
+    .mcx-rec.reduce{background:rgba(248,81,73,.09);border-color:rgba(248,81,73,.32)}
+    .mcx-rectop{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+    .mcx-recpill{font-size:11px;font-weight:750;padding:2px 9px;border-radius:6px;letter-spacing:.04em}
+    .mcx-recname{font-size:17px;font-weight:730}
+    .mcx-recsub{font-size:12px;color:#8b97a7}
+    .mcx-flow{display:flex;align-items:center;gap:9px;flex-wrap:wrap;background:#12161d;border:1px solid #1e2530;border-radius:13px;padding:15px 18px}
+    .mcx-node{background:#0f1520;border:1px solid #1e2530;border-radius:9px;padding:8px 14px;font-size:13px;font-weight:620}
+    .mcx-arrow{color:#5b6675;font-size:15px}
+    .mcx-chain{background:#12161d;border:1px solid #1e2530;border-radius:12px;padding:13px 17px;margin-bottom:9px;border-left:3px solid #5b6675}
+    .mcx-ctop{display:flex;align-items:center;gap:10px;margin-bottom:4px}
+    .mcx-cname{font-size:14.5px;font-weight:680}
+    .mcx-cint{margin-left:auto;font-size:13px;font-weight:700;font-family:ui-monospace,Menlo,monospace}
+    .mcx-cverd{font-size:12px;color:#8b97a7}
+    .mcx-note{margin-top:22px;font-size:11.5px;color:#5b6675;line-height:1.55;border-top:1px solid #1e2530;padding-top:14px}
+    </style>"""
+
+    def tile(m):
+        c = _mc_color(m)
+        val = f"<span class='n'>{m['value']}</span>" if (m['real'] and m['value'] is not None) else "<span class='n na'>n/a</span>"
+        return (f"<div class='mcx-tile'><div class='l'>{m['name']}</div>{val}"
+                f"<div class='s'><span class='mcx-dot' style='background:{c}'></span>{m['status'][:22]}</div></div>")
+
+    def meter(m):
+        c = _mc_color(m)
+        num = f"<span class='mcx-mnum'>{m['value']}</span>" if (m['real'] and m['value'] is not None) else "<span class='mcx-mnum na'>n/a</span>"
+        w = max(0, min(100, m['value'])) if (m['real'] and m['value'] is not None) else 0
+        tags = "".join(f"<span class='mcx-tag'>{t}</span>" for t in (m.get('components') or []))
+        return (f"<div class='mcx-meter{'' if m['real'] else ' off'}'>"
+                f"<div class='mcx-mtop'><span class='mcx-mname'><span class='mcx-idot' style='background:{c}'></span>{m['name']} Meter</span>{num}</div>"
+                f"<div class='mcx-mstatus'><span class='mcx-dot' style='background:{c}'></span>{m['status']}<span class='mcx-range'>0&ndash;100</span></div>"
+                f"<div class='mcx-bar'><div class='mcx-fill' style='width:{w}%;background:{c}'></div></div>"
+                f"<div class='mcx-tags'>{tags}</div></div>")
+
+    by = {m["name"]: m for m in meters}
+    top5 = [by[n] for n in ["Macro", "Crash", "Liquidity", "Rotation", "Conviction"] if n in by]
+    header = (f"<div class='mcx-hd'><span class='mcx-shield'>&#9670;</span>"
+              f"<div><div class='t'>WAR ROOM</div><div class='d'>{date} &middot; Mission Control</div></div>"
+              f"<span class='mcx-badge' style='background:{risk_hex}22;color:{risk_hex}'>{risk}</span></div>")
+    tiles = "<div class='mcx-tiles'>" + "".join(tile(m) for m in top5) + "</div>"
+    meters_html = "<div class='mcx-lbl'>Meters</div>" + "".join(meter(m) for m in meters)
+
+    # recommendations from conviction
+    recs = ""
+    for r in (d.get("conviction") or [])[:4]:
+        dr = r.get("_dir")
+        if dr == "Long":
+            cls, pill, pc = "buy", "BUY", "#3fb950"
+        elif dr == "Short":
+            cls, pill, pc = "reduce", "REDUCE", "#f85149"
+        else:
+            cls, pill, pc = "wait", "WAIT", "#d6a429"
+        recs += (f"<div class='mcx-rec {cls}'><div class='mcx-rectop'><span class='mcx-recpill' style='background:{pc}22;color:{pc}'>{pill}</span>"
+                 f"<span class='mcx-recname'>{r.get('ticker','?')}</span></div>"
+                 f"<div class='mcx-recsub'>${r.get('px','—')} &middot; entry {r.get('entry','—')} &middot; stop {r.get('stop','—')} &middot; target {r.get('target','—')}</div></div>")
+    recs_html = ("<div class='mcx-lbl'>Highest Conviction</div><div class='mcx-recs'>" + recs + "</div>") if recs else ""
+
+    # money rotation flow from compass
+    if isinstance(score, (int, float)) and score > 2:
+        flow = ["Cash", "Credit", "Equities", "Cyclicals", "High-beta"]
+    elif isinstance(score, (int, float)) and score < -2:
+        flow = ["Cash", "Treasury", "Gold", "USD", "Defensives"]
+    else:
+        flow = ["Cash", "Treasury", "Balanced", "Selective"]
+    nodes = "<span class='mcx-arrow'>&rarr;</span>".join(f"<span class='mcx-node'>{n}</span>" for n in flow)
+    flow_html = f"<div class='mcx-lbl'>Money Rotation &middot; {cr.get('compass','—')}</div><div class='mcx-flow'>{nodes}</div>"
+
+    # active chains from causal engine
+    chains = ""
+    for c in (d.get("causal_chains") or [])[:4]:
+        col = {"grn": "#3fb950", "red": "#f85149", "amb": "#d6a429", "gry": "#5b6675"}.get(c.get("color"), "#5b6675")
+        integ = c.get("integrity")
+        chains += (f"<div class='mcx-chain' style='border-left-color:{col}'><div class='mcx-ctop'>"
+                   f"<span class='mcx-cname'>{c.get('name','—')}</span>"
+                   f"<span class='mcx-cint' style='color:{col}'>{integ if integ is not None else '—'}%</span></div>"
+                   f"<div class='mcx-cverd'>{c.get('verdict','')}</div></div>")
+    chains_html = ("<div class='mcx-lbl'>Active Causal Chains</div>" + chains) if chains else ""
+
+    note = ("<div class='mcx-note'>Design matches the mockup spec. 4 meters carry real data (Macro from regime probs, Crash, Rotation, Entry, Conviction); "
+            "Liquidity / Credit / Bubble / Wealth / Trend are greyed &mdash; no live feed yet, not faked. On synthetic sandbox data values are plumbing; real values populate on your machine. "
+            "Money rotation is derived from the cross-asset compass; recommendations are the top conviction setups.</div>")
+
+    html = f"<div class='mcx'>{header}{tiles}{recs_html}{flow_html}{meters_html}{chains_html}{note}</div>"
+    st.markdown(css + html, unsafe_allow_html=True)

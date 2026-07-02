@@ -40,23 +40,30 @@ def main():
             BE.export(d)   # regenerate the interactive briefing deck (briefing.html) with today's data
         except Exception:
             pass
-    tabs = st.tabs(["Morning Brief", "Command Center", "Alpha Center", "Cross-Asset Rotation",
-                    "US Stocks", "Crypto", "Commodities", "FX", "IHSG", "Flow", "Bottleneck",
+    tabs = st.tabs(["Mission Control", "Morning Brief", "Briefing", "Command Center", "Alpha Center", "Cross-Asset Rotation",
+                    "Causal Chains", "US Stocks", "Crypto", "Commodities", "FX", "IHSG", "Flow", "Bottleneck",
                     "Market State", "Track Record", "Risk & Health"])
-    with tabs[0]: R.morning_brief(d)
-    with tabs[1]: R.command_center(d, source)
-    with tabs[2]: R.alpha(d)
-    with tabs[3]: R.cycle_rotation(d)
-    with tabs[4]: R.us_stocks(d)
-    with tabs[5]: R.crypto(d)
-    with tabs[6]: R.commodities(d)
-    with tabs[7]: R.fx(d)
-    with tabs[8]: R.ihsg(d)
-    with tabs[9]: R.flow(d)
-    with tabs[10]: R.bottleneck(d)
-    with tabs[11]: R.market_state(d)
-    with tabs[12]: R.track_record(TR.performance(), TR.open_positions(), TR.closed_trades())
-    with tabs[13]: R.risk_health(d)
+    with tabs[0]: R.mission_control(d)
+    with tabs[1]: R.morning_brief(d)
+    with tabs[2]: R.briefing_embed()
+    with tabs[3]: R.command_center(d, source)
+    with tabs[4]: R.alpha(d)
+    with tabs[5]: R.cycle_rotation(d)
+    with tabs[6]: R.causal_chains(d)
+    with tabs[7]:
+        R.us_stocks(d)
+        R.fair_value_cards(d)
+    with tabs[8]: R.crypto(d)
+    with tabs[9]: R.commodities(d)
+    with tabs[10]: R.fx(d)
+    with tabs[11]: R.ihsg(d)
+    with tabs[12]: R.flow(d)
+    with tabs[13]:
+        R.bottleneck(d)
+        R.node_template(d)
+    with tabs[14]: R.market_state(d)
+    with tabs[15]: R.track_record(TR.performance(), TR.open_positions(), TR.closed_trades())
+    with tabs[16]: R.risk_health(d)
 
 
 if __name__ == "__main__":
