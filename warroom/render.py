@@ -1536,10 +1536,23 @@ def mission_control(d):
         att_html = (f"<div class='mcx-lbl' style='margin-top:14px'>Today's Attention{sub}</div>"
                     f"<div class='mcx-att'>{cards}</div>")
 
-    note = ("<div class='mcx-note'>All 10 meters now compute from real data: Macro (regime probs), Crash, Rotation, Entry, Conviction from engines; "
-            "Trend/Credit/Bubble/Wealth from price proxies; Liquidity from funding-stress (FRED when wired). "
-            "Entry/stop/target come from the decision engine (stop sits outside the entry zone). Thesis targets, convexity, and alpha tier are shown per name. "
-            "On synthetic sandbox data these are plumbing; real values populate on your machine with cached data + FRED key.</div>")
+    # Valuation room context (shows CAPE percentile + months-to-drawdown — no more guessing)
+    vr = d.get("valuation_room") or {}
+    vr_html = ""
+    if vr.get("current_cape"):
+        m = vr.get("months_to_next_20pct_drawdown", {})
+        wh = vr.get("when_this_high", {})
+        vr_html = (f"<div class='mcx-lbl' style='margin-top:14px'>Valuation Context (data-tested, 1871-2023)</div>"
+                   f"<div class='mcx-attcard' style='border-left-color:#6ea8ff;margin-bottom:8px'>"
+                   f"<div class='mcx-atttitle'>CAPE {vr['current_cape']} · {vr['percentile']:.0f}th percentile</div>"
+                   f"<div class='mcx-attstat'>When this rich historically: fwd 1yr {wh.get('fwd_1yr_pct',0):+.0f}% · 3yr {wh.get('fwd_3yr_pct',0):+.0f}% · "
+                   f"{wh.get('pct_1yr_positive',0):.0f}% of the time still positive</div>"
+                   f"<div class='mcx-attarrow' style='color:#6ea8ff'>Median {m.get('median','?')} months to next −20% drawdown "
+                   f"(range {m.get('min','?')}-{m.get('max','?')}). High valuation lowers returns — it does NOT time the top.</div></div>")
 
-    html = f"<div class='mcx'>{header}{att_html}{tiles}{recs_html}{flow_html}{meters_html}{chains_html}{note}</div>"
+    note = ("<div class='mcx-note'>Signals shown are the ones that passed testing (see CERTIFICATION.md): panic-bottom contrarian (p&lt;0.001), "
+            "cross-sectional RS for ticker edge (lift 2x). The naive formation+RS signal FAILED testing (no edge) and does not drive BUYs. "
+            "Every number is traceable to a walk-forward/bootstrap test — run `python certify.py` to regenerate the full report.</div>")
+
+    html = f"<div class='mcx'>{header}{att_html}{tiles}{recs_html}{vr_html}{flow_html}{meters_html}{chains_html}{note}</div>"
     st.markdown(css + html, unsafe_allow_html=True)

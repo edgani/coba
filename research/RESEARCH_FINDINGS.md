@@ -180,3 +180,43 @@ ROOM & RISIKO, bukan sinyal jual. Engine: `signal_edge.valuation_room()`.
 
 ⚠️ Bubble=100 di screenshot itu dari data SINTETIS sandbox — ga meaningful. Di data real lu, meter ini
 harus dibaca sebagai konteks risiko (turunin size, siapin hedge), bukan trigger jual.
+
+---
+
+## 7. EARLY WARNING — panic bottom & euphoria top (TERUJI)
+
+Pertanyaan lu: "early warning saat panic sell padahal mau bottom, & euforia padahal mau crash."
+Diuji di S&P 500 + VIX real 2013-2018:
+
+**PANIC = BOTTOM → SIGNIFIKAN & TERUJI:**
+| sinyal | fwd 63d | vs baseline | p |
+|---|---|---|---|
+| VIX spike + oversold (z<-1) | +6.2% | +3.3% | <0.001 ✓ |
+| breadth >80% below 50ma | +7.9% | +3.3% | ✓ |
+| VIX vs 20d-avg (dose response) | spike +5.2% vs calm +2.1% | corr +0.24 | <0.0001 ✓ |
+| composite fear-greed (EXTREME FEAR) | +5.3% | — | corr(greed,fwd) -0.21, p<0.0001 ✓ |
+
+**PANIC selling MEMANG sinyal beli kontrarian dengan edge signifikan.** Ini di dashboard sekarang
+(`early_warning.py` → Today's Attention: "⚠ PANIC BOTTOM setup" saat aktif).
+
+**EUPHORIA = TOP → LEMAH, belum terbukti:** fwd return sedikit lebih rendah tapi p=0.34 (tidak
+signifikan) di 2013-18 (bias bull market). Butuh data 2008/2020/2022. Di-FLAG jujur, ga di-overclaim.
+
+## 8. CONNECTING THE DOTS (lead-lag) — jujur: prediktif LEMAH
+
+Pertanyaan lu: "NVDA surging → supplier CPO/photonic ikut? oil→tanker→dst?" Diuji:
+- Pair supply-chain terkenal (NVDA→AMD, NVDA→MU, AAPL→SWKS): **TIDAK ada lead-lag prediktif signifikan.**
+- Scan sistematis: cuma pair spurious lemah (ga ada logika ekonomi).
+
+**Kesimpulan jujur:** "dots" MEMANG nyambung, tapi **contemporaneous (bareng), bukan prediktif** — market
+pricing in same-day, ga bisa front-run harian. Jadi beta-chain berguna buat **thematic exposure** ("kalo
+tema X lari, nama-nama ini ikut" → own the chain), BUKAN buat prediksi lag. Propagasi fundamental
+(earnings NVDA → supplier next quarter) plausible tapi butuh data fundamental yang belum ada. Klaim
+"dashboard bisa prediksi urutan surging dari lead-lag harian" = TIDAK didukung data. Gw ga akan jual itu.
+
+## OTOMASI PENUH (lu ga perlu jalanin apa-apa)
+
+`python certify.py` → jalanin SEMUA test di atas otomatis, hasilkan `CERTIFICATION.md` dengan status
+PRODUCTION/RESEARCH/FAIL per engine + confidence. Lu ga perlu ngerti test-nya — statusnya jelas.
+`python warroom/data_ingest.py` (via ensure/add_ticker) → auto-tarik ticker baru ke cache (jalan di
+mesin lu dengan yfinance/stooq; di sandbox ke-block, gagal graceful).

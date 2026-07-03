@@ -33,6 +33,18 @@ def build(d):
     conv = d.get("conviction") or []
     cg = d.get("country_regime") or {}
     dm = d.get("decision_market") or {}
+    ew = d.get("early_warning") or {}
+
+    # 0. PANIC BOTTOM (validated contrarian, p<0.001) — highest priority when active
+    panic = ew.get("panic") or {}
+    if panic.get("active"):
+        items.append({"title": "⚠ PANIC BOTTOM setup", "status": f"VIX {panic.get('vix_pct'):.0f}pct · {panic.get('breadth_below_50ma',0):.0f}% below 50ma",
+                      "arrow": f"contrarian BUY · {panic.get('expected_fwd63','')}", "urg": 95, "color": "grn"})
+    fg = ew.get("fear_greed") or {}
+    if fg.get("value") is not None and (fg["value"] < 30 or fg["value"] > 75):
+        items.append({"title": f"Fear-Greed {fg['value']:.0f}", "status": fg.get("state", ""),
+                      "arrow": fg.get("signal", "")[:48], "urg": int(abs(fg["value"] - 50) * 1.6),
+                      "color": fg.get("color", "amb")})
 
     # 1. Crash risk (high pressure = urgent)
     cp = crash.get("pressure")

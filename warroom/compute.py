@@ -442,6 +442,31 @@ def run(us, idx, crypto, fx, commo, fred=None, feeds=None):
     # composite meters from price proxies + funding (replaces stubbed 'needs data feed')
     from warroom import meters as MET
     out["meters_computed"] = _try(lambda: MET.compute_all(us, fred, out.get("fair_value"))) or {}
+    # Early warning (panic-bottom / fear-greed — VALIDATED contrarian, p<0.001) + valuation room
+    def _early_warning():
+        from warroom import early_warning as EW
+        import pandas as pd, os
+        vix = None
+        vp = os.path.join(os.path.dirname(__file__), "..", "research", "vix.csv")
+        if os.path.exists(vp):
+            try:
+                v = pd.read_csv(vp, parse_dates=["DATE"]).set_index("DATE")["CLOSE"]
+                vix = v
+            except Exception:
+                vix = None
+        cl = pd.DataFrame({t: d["Close"] for t, d in us.items() if d is not None and len(d) > 60})
+        return EW.build(cl, vix) if len(cl.columns) > 10 else {}
+    out["early_warning"] = _try(_early_warning) or {}
+    def _valuation_room():
+        from warroom import signal_edge as SE
+        import pandas as pd, os
+        sp = os.path.join(os.path.dirname(__file__), "..", "research", "shiller.csv")
+        if not os.path.exists(sp):
+            return {}
+        s = pd.read_csv(sp, parse_dates=["Date"]).set_index("Date").sort_index()
+        s = s[(s["Consumer Price Index"] > 0) & (s["PE10"] > 0)]
+        return SE.valuation_room(s["PE10"], s["SP500"])
+    out["valuation_room"] = _try(_valuation_room) or {}
     out["beta_plays"] = _try(lambda: BP.analyze_themes(allpx)) or {}
     out["thesis_beta"] = _try(lambda: TB.compute(allpx, out.get("beta_plays") or {})) or {}
     out["theme_graph"] = _try(lambda: TH.connect_dots(allpx)) or {}

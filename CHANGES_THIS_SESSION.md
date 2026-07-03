@@ -302,3 +302,30 @@ Dijalankan di 1820 bulan real (1872-2023):
 ## Cara pakai di data LU
 `python research/fetch_sample_data.py && python run_research.py --all` (sample), atau
 `python run_research.py --tickers your_cache.parquet` (data lu, multi-regime 2008-2026 → hasil lebih kuat).
+
+---
+
+# LANJUTAN — Early Warning, Auto-Ingest, Master Automation, Valuation di UI
+
+## Yang teruji & masuk turn ini
+- **PANIC=BOTTOM tervalidasi** (fwd63 +6.2% vs +3.3%, p<0.001) → `early_warning.py` → tampil di
+  Today's Attention saat aktif ("⚠ PANIC BOTTOM setup"). Euphoria-top di-flag lemah (jujur).
+- **Auto-add ticker** → `data_ingest.py`: add_ticker/ensure/update_cache/build_panel. Ticker baru
+  auto-tarik dari stooq/yfinance ke cache parquet. Sandbox: gagal graceful; mesin lu: jalan penuh.
+- **Master automation** → `certify.py`: satu perintah jalanin SEMUA test, hasilkan CERTIFICATION.md
+  (PRODUCTION/RESEARCH/FAIL per engine). Jawaban "gw ga mau jalanin test sendiri."
+- **CAPE months di UI** → Mission Control sekarang nampilin "Valuation Context: CAPE 30.8, 95th pct,
+  median 21 bulan ke -20% drawdown." Lu ga usah nerka lagi.
+- **Lead-lag diuji → prediktif lemah** (jujur): beta-chain buat thematic exposure, bukan prediksi lag.
+
+## File turn ini
+- `warroom/early_warning.py`, `warroom/data_ingest.py`, `certify.py` (BARU)
+- (updated) compute.py (early_warning + valuation_room di output), render.py (valuation panel + panic
+  di attention), attention.py (fear-greed/panic), run_validation.py (signal-edge test)
+- research/RESEARCH_FINDINGS.md §7-8, CERTIFICATION.md (auto-generated)
+
+## UI/UX — status jujur
+Turn ini gw TAMBAH ke UI: valuation context (CAPE months), panic/fear-greed di Today's Attention,
+Decision Market, country grid, thesis targets. TAPI redesign penuh dari-0 (17 tab, pixel-match Nova
+Capital) BELUM. Itu effort besar tersendiri. Substansi (data teruji, auto-ingest, early warning,
+otomasi) udah jadi — itu fondasi yang lu tekankan berkali-kali. UI redesign penuh = langkah berikutnya.
