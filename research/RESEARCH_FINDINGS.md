@@ -270,3 +270,41 @@ sinyal quad tunggal. Risk-regime & dollar-hub adalah yang paling kuat buat dijad
 Rekomendasi cross-asset (dari yang HISTORIS menang, teruji): equities via RS top-decile + risk-regime;
 gold/oil via dollar direction + macro quad; dollar via risk regime; timing agresif/defensif via composite
 score. `python certify.py` → status semua engine (Cross-Asset Macro = PRODUCTION).
+
+---
+
+## 10. CRASH EARLY-WARNING — seberapa EARLY bisa warn? (jujur, probabilistik)
+
+Pertanyaan lu: "kalo ada indikasi crash tahun depan, kita udah jaga-jaga dari tahun ini." Diuji seberapa
+jauh ke depan tiap indikator bisa warn >20% drawdown (macro panel 1881-2023):
+
+| indikator | 6mo | 12mo | 18mo | 24mo | 36mo |
+|---|---|---|---|---|---|
+| prior vol | +0.16* | +0.14* | +0.13* | +0.13* | +0.10* |
+| momentum 12m | -0.15* | -0.14* | -0.08* | -0.03 | +0.03 |
+| CAPE valuation | -0.02 | -0.04 | -0.03 | -0.01 | -0.01 |
+| real rate | -0.00 | -0.06 | -0.05 | -0.04 | -0.05 |
+(* = p<0.01. corr indikator vs kejadian crash ke depan)
+
+**KEBENARAN yang bikin lu ga ketipu:**
+- **Crash TIDAK bisa diprediksi yakin setahun ke depan.** Indikator terbaik cuma lift 1.1-1.2x. Yang
+  bilang "top udah in, jual" dengan pasti = omong kosong. (Inget: gw uda buktiin makro cuma jelasin
+  R²=3% variance drawdown.)
+- **TAPI RISK ELEVATION bisa (probabilistik):** composite (valuasi mahal + real rate negatif + vol tinggi)
+  → P(crash dalam 24 bulan) **15% → 27%** (corr +0.097, p=0.0001).
+- **Valuasi murah = "safety" kuat:** P(crash 36mo) cuma **8%** vs 25% base. Murah = aman; mahal = potensi
+  severity, bukan timing.
+- **Lead terkuat:** prior vol (persisten semua horizon) + momentum melemah (~6-18 bulan lead).
+
+**Output sistem = PROBABILITAS + POSITIONING, bukan sinyal jual biner:** "P(>20% drawdown dalam 24 bulan)
+= X% (vs base Y%) → kurangi size/hedge." Ini yang bikin pembaca yakin — angka teruji, dan lu ga akan kena
+"disuruh jual tapi naik setahun lagi" karena kita bilang "risiko naik, kecilin size", bukan "jual sekarang".
+Engine: `crash_lead.py`. Di Today's Attention: "Crash Risk (24mo): X%".
+
+## Data yang BELUM bisa diuji (jujur — bukan diabaikan)
+Lu minta COT, open interest, options/Greeks. Status:
+- **COT (CFTC)**: scraper ada (`engines/cftc_cot_scraper.py`), butuh koneksi CFTC (ke-block di sandbox).
+  Di mesin lu bisa jalan. Belum gw uji empiris karena data ga ketarik di sini.
+- **Options/Greeks/open-interest historis**: ini data PROPRIETARY/MAHAL (OPRA, CBOE DataShop). TIDAK ada
+  gratis di domain yang bisa gw akses. Gw ga akan pura-pura punya. Kalau lu punya sumbernya (mis. langganan),
+  engine bisa dibangun & diuji. Sampai itu ada, gw ga masukin sinyal options — biar ga jadi asal bunyi.

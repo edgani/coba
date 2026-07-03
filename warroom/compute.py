@@ -486,6 +486,13 @@ def run(us, idx, crypto, fx, commo, fred=None, feeds=None):
             pass
         return MR.build(base) if base is not None else {}
     out["macro_regime"] = _try(_macro_regime) or {}
+    # Crash lead-time early warning (probabilistic, multi-horizon — how early can we warn)
+    def _crash_lead():
+        from warroom import crash_lead as CL
+        import pandas as pd, os
+        mp = os.path.join(os.path.dirname(__file__), "..", "research", "macro_panel.parquet")
+        return CL.build(pd.read_parquet(mp)) if os.path.exists(mp) else {}
+    out["crash_lead"] = _try(_crash_lead) or {}
     out["beta_plays"] = _try(lambda: BP.analyze_themes(allpx)) or {}
     out["thesis_beta"] = _try(lambda: TB.compute(allpx, out.get("beta_plays") or {})) or {}
     out["theme_graph"] = _try(lambda: TH.connect_dots(allpx)) or {}

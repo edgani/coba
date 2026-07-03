@@ -35,6 +35,15 @@ def build(d):
     dm = d.get("decision_market") or {}
     ew = d.get("early_warning") or {}
     mr = d.get("macro_regime") or {}
+    cl = (d.get("crash_lead") or {}).get("crash_lead") or {}
+    if cl.get("risk_level"):
+        p24 = (cl.get("crash_prob") or {}).get(24)
+        b24 = (cl.get("base_prob") or {}).get(24)
+        lvl = cl["risk_level"]
+        items.append({"title": f"Crash Risk (24mo): {p24*100:.0f}%" if p24 else "Crash Risk",
+                      "status": f"{lvl} · base {b24*100:.0f}% · score {cl.get('score')}/3",
+                      "arrow": (cl.get("action","") or "")[:52], "urg": 80 if lvl=="ELEVATED" else 40,
+                      "color": cl.get("color","amb")})
 
     # Cross-asset macro regime: aggressive/defensive timing (TESTED, predicts drawdown)
     rr = mr.get("risk_regime") or {}

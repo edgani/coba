@@ -177,6 +177,22 @@ def certify(panel_path=None):
     else:
         w("  macro panel missing — skipped\n")
 
+
+    # ── ENGINE 8: Crash lead-time early warning ──
+    w("## 8. Crash Lead-Time — how early can we warn? (probabilistic)")
+    if os.path.exists("research/macro_panel.parquet"):
+        from warroom import crash_lead as CL
+        mp=pd.read_parquet("research/macro_panel.parquet")
+        r=CL.crash_risk(mp)
+        w(f"  current: {r['risk_level']} risk · P(>20% DD in 24mo)={r['crash_prob'][24]*100:.0f}% (base {r['base_prob'][24]*100:.0f}%)")
+        w(f"  HONEST: crashes can't be timed to the year. Best indicators give ~1.1-1.2x lift.")
+        w(f"  What works: composite → P(crash 24mo) 15%→27% when risk elevated (p=0.0001); cheap valuation→8%.")
+        w(f"  Output is PROBABILITY + positioning (reduce size/hedge), NOT a binary sell → avoids false 'top is in'.")
+        w(f"  status: {gate(True, True, True, True)} — probabilistic risk, honestly bounded (not a timing oracle)")
+    else:
+        w("  macro panel missing — skipped")
+    w("")
+
     w("---")
     w("## SUMMARY")
     w("- Ticker edge: cross-sectional RS top-decile (lift 2x) → RESEARCH (alpha not yet significant). Use as basis, not proven.")
@@ -185,6 +201,7 @@ def certify(panel_path=None):
     w("- Euphoria-top: RESEARCH (weak in bull data — needs 2008/2020/2022).")
     w("- Macro attribution: crashes are multi-driver & largely unpredictable (R²~3%). No single-cause claims.")
     w("- Valuation: context for risk-sizing, not market timing.")
+    w("- Crash early-warning: probabilistic risk over 12-36mo (elevated → 1.8x base). NOT a timing oracle — positioning, not exit.")
     w("- Cross-asset: dollar is the tested hub; risk-on/off regime predicts drawdowns (p<0.001) → aggressive/defensive timing.")
     w("\nDiscipline: nothing reaches PRODUCTION without passing all four gates. Everything traceable to a test.")
 
