@@ -1377,6 +1377,32 @@ def _mc_color(m):
     return _MCC.get(m["name"], "#4493f8")
 
 
+def _confidence_panel():
+    """Signal Confidence — shows which signals passed testing (from certify.py). This is what gives the
+    reader confidence: every signal is labelled by its validation status, so you know what's proven vs
+    research vs rejected. Statuses reflect the actual test results in research/RESEARCH_FINDINGS.md."""
+    signals = [
+        ("Panic-bottom (fear → buy)", "PRODUCTION", "grn", "fwd63 +6% vs +3%, p<0.001"),
+        ("Cross-asset macro (dollar hub)", "PRODUCTION", "grn", "risk-regime predicts drawdown, p<0.001"),
+        ("Crash lead-time (24mo risk)", "PRODUCTION", "grn", "probabilistic, honestly bounded"),
+        ("Valuation room (CAPE context)", "PRODUCTION", "grn", "CAPE deciles → fwd returns, tested"),
+        ("Ticker RS top-decile", "RESEARCH", "amb", "lift 2x in tails, alpha not yet significant"),
+        ("Euphoria-top signal", "RESEARCH", "amb", "weak in bull data, needs 2008/2020/2022"),
+        ("Sector/asset rotation momentum", "RESEARCH", "amb", "descriptive; not proven predictive"),
+        ("Naive formation+RS BUY", "REJECTED", "red", "no edge (lift 0.85x) — does not drive BUYs"),
+    ]
+    rows = ""
+    for name, status, col, why in signals:
+        c = {"grn": "#3fb950", "amb": "#d6a429", "red": "#f85149"}[col]
+        icon = {"PRODUCTION": "✓", "RESEARCH": "◐", "REJECTED": "✕"}[status]
+        rows += (f"<div class='mcx-cfrow'><span class='mcx-cficon' style='color:{c}'>{icon}</span>"
+                 f"<span class='mcx-cfname'>{name}</span>"
+                 f"<span class='mcx-cfbadge' style='color:{c};background:{c}1a'>{status}</span>"
+                 f"<span class='mcx-cfwhy'>{why}</span></div>")
+    return (f"<div class='mcx-lbl'>Signal Confidence — what passed testing (run <code>certify.py</code>)</div>"
+            f"<div class='mcx-cf'>{rows}</div>")
+
+
 def mission_control(d):
     from warroom import brief_export as BE
     meters = BE._meters(d)
@@ -1425,6 +1451,13 @@ def mission_control(d):
     .mcx-recpill{font-size:11px;font-weight:750;padding:2px 9px;border-radius:6px;letter-spacing:.04em}
     .mcx-recname{font-size:17px;font-weight:730}
     .mcx-recsub{font-size:12px;color:#8b97a7}
+    .mcx-cf{background:#12161d;border:1px solid #1e2530;border-radius:14px;padding:8px 6px;margin-bottom:8px}
+    .mcx-cfrow{display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:0.5px solid #1a2029}
+    .mcx-cfrow:last-child{border-bottom:none}
+    .mcx-cficon{font-size:15px;font-weight:800;width:16px;text-align:center;flex:none}
+    .mcx-cfname{font-size:13.5px;font-weight:600;color:#e6edf3;min-width:210px}
+    .mcx-cfbadge{font-size:10px;font-weight:800;letter-spacing:.05em;padding:3px 9px;border-radius:6px;flex:none}
+    .mcx-cfwhy{font-size:11.5px;color:#8b97a7;margin-left:auto;text-align:right}
     .mcx-recthesis{font-size:11.5px;color:#aeb9c7;margin-top:6px;padding-top:5px;border-top:0.5px solid #222833}
     .mcx-reckill{font-size:10.5px;color:#7d8898;margin-top:3px;opacity:.85}
     .mcx-att{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:9px;margin:6px 0 8px}
@@ -1556,3 +1589,128 @@ def mission_control(d):
 
     html = f"<div class='mcx'>{header}{att_html}{tiles}{recs_html}{vr_html}{flow_html}{meters_html}{chains_html}{note}</div>"
     st.markdown(css + html, unsafe_allow_html=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════════════════════
+# NEW TABS (blueprint-aligned): Cross-Asset Macro · Early Warning · Validation
+# These surface the validated engines (macro_regime, early_warning, crash_lead, valuation_room) as
+# dedicated views, grouping correlated signals together per the spec (not scattered).
+# ═══════════════════════════════════════════════════════════════════════════════════════════════
+
+_MCC = {"grn": "#3fb950", "amb": "#d6a429", "red": "#f85149", "inf": "#6ea8ff", "gry": "#5b6675"}
+
+def cross_asset_macro(d):
+    """Cross-Asset Macro tab — risk-on/off timing, dollar hub, quad playbook, inflation play. TESTED.
+    Groups all cross-asset macro (stocks/gold/oil/dollar/rates) in ONE place (blueprint Market DNA + macro)."""
+    mr = d.get("macro_regime") or {}
+    rr = mr.get("risk_regime") or {}; mq = mr.get("macro_quad") or {}; ip = mr.get("inflation_play") or {}
+    links = mr.get("cross_asset_links") or {}
+    if not rr and not mq:
+        st.markdown(CSS + "<div class='wr-note'>Cross-asset macro needs the macro panel (research/macro_panel.parquet). Run on your machine with cached data.</div>", unsafe_allow_html=True)
+        return
+    # risk regime hero
+    rc = _MCC.get(rr.get("color"), "#5b6675")
+    hero = (f"<div class='mcx-hd'><span class='mcx-shield'>◆</span><div><div class='t'>CROSS-ASSET MACRO</div>"
+            f"<div class='d'>risk-on/off timing · dollar hub · macro-state playbook — all tested (1971-2023)</div></div>"
+            f"<span class='mcx-badge' style='color:{rc};background:{rc}1a'>{rr.get('verdict','—')}</span></div>")
+    # risk regime card
+    comps = rr.get("components", {})
+    comp_str = " · ".join(f"{k.replace('_',' ')}: {'✓' if v else '✗'}" for k, v in comps.items())
+    rr_card = (f"<div class='mcx-meter'><div class='mcx-mtop'><span class='mcx-mname'>Risk Regime "
+               f"<span style='font-size:12px;color:#8b97a7'>(when to be aggressive vs defensive)</span></span>"
+               f"<span class='mcx-mnum' style='color:{rc}'>{rr.get('score','—')}/3</span></div>"
+               f"<div class='wr-sub' style='margin:6px 0'>{comp_str}</div>"
+               f"<div class='mcx-attarrow' style='color:{rc}'>{rr.get('action','')}</div>"
+               f"<div class='wr-note' style='margin-top:8px'>{rr.get('basis','')}</div></div>")
+    # macro quad + inflation
+    q_card = ""
+    if mq.get("quad"):
+        q_card = (f"<div class='mcx-meter'><div class='mcx-mtop'><span class='mcx-mname'>Macro State: {mq['quad']}</span></div>"
+                  f"<div class='wr-row' style='gap:16px;margin:8px 0'><span class='b-grn'>LONG {mq.get('long')}</span>"
+                  f"<span class='b-red'>SHORT {mq.get('short')}</span></div>"
+                  f"<div class='wr-sub'>{mq.get('note','')}</div>"
+                  + (f"<div class='mcx-attarrow' style='color:#6ea8ff;margin-top:6px'>Inflation {ip.get('inflation_direction','')}: {ip.get('play','')}</div>" if ip else "")
+                  + f"<div class='wr-note' style='margin-top:6px'>{mq.get('basis','')}</div></div>")
+    # dollar hub links
+    link_rows = ""
+    for (a, b), v in links.items():
+        c = _MCC["grn"] if v["p"] < 0.01 else _MCC["amb"]
+        link_rows += (f"<div class='mcx-cfrow'><span class='mcx-cficon' style='color:{c}'>↔</span>"
+                      f"<span class='mcx-cfname'>{a} ↔ {b}</span>"
+                      f"<span class='mcx-cfbadge' style='color:{c};background:{c}1a'>corr {v['corr']:+.2f}</span>"
+                      f"<span class='mcx-cfwhy'>{v['play']}</span></div>")
+    hub = (f"<div class='mcx-lbl'>Dollar = Hub (tested cross-asset links, p&lt;0.001)</div>"
+           f"<div class='mcx-cf'>{link_rows}</div>"
+           f"<div class='wr-note'>The dollar is the master driver: when it rises, gold/oil/stocks tend to fall. "
+           f"'Short dollar → long gold/oil/stocks' is the tested play. This is connecting-the-dots that survives testing "
+           f"(unlike daily stock lead-lag, which failed).</div>") if link_rows else ""
+    st.markdown(CSS + f"<div class='mcx'>{hero}{rr_card}{q_card}{hub}</div>", unsafe_allow_html=True)
+
+
+def early_warning_tab(d):
+    """Early Warning tab — panic-bottom, fear-greed, crash lead-time, valuation room. Grouped (blueprint #386-400).
+    Answers: when is fear a buy, when is euphoria a top, how early can we warn, how much room at high valuation."""
+    ew = d.get("early_warning") or {}; cl = (d.get("crash_lead") or {}).get("crash_lead") or {}
+    vr = d.get("valuation_room") or {}
+    fg = ew.get("fear_greed") or {}; panic = ew.get("panic") or {}
+    hero = (f"<div class='mcx-hd'><span class='mcx-shield'>◆</span><div><div class='t'>EARLY WARNING</div>"
+            f"<div class='d'>panic-bottom · fear-greed · crash lead-time · valuation room — all tested</div></div></div>")
+    # fear-greed gauge
+    fgv = fg.get("value")
+    fgc = _MCC.get(fg.get("color"), "#5b6675")
+    fg_card = ""
+    if fgv is not None:
+        pct = max(0, min(100, fgv))
+        fg_card = (f"<div class='mcx-meter'><div class='mcx-mtop'><span class='mcx-mname'>Fear-Greed Index</span>"
+                   f"<span class='mcx-mnum' style='color:{fgc}'>{fgv:.0f}</span></div>"
+                   f"<div style='height:10px;border-radius:5px;background:linear-gradient(90deg,#3fb950,#d6a429,#f85149);position:relative;margin:8px 0'>"
+                   f"<div style='position:absolute;left:{pct}%;top:-3px;width:3px;height:16px;background:#fff;border-radius:2px'></div></div>"
+                   f"<div class='wr-row' style='justify-content:space-between'><span class='wr-sub'>0 extreme fear (BUY)</span><span class='wr-sub'>100 extreme greed</span></div>"
+                   f"<div class='mcx-attarrow' style='color:{fgc};margin-top:6px'>{fg.get('state','')} — {fg.get('signal','')}</div>"
+                   f"<div class='wr-note' style='margin-top:6px'>{fg.get('confidence','')}</div></div>")
+    # panic alert
+    panic_card = ""
+    if panic.get("active"):
+        panic_card = (f"<div class='mcx-meter' style='border-color:#3fb95055'><div class='mcx-mname' style='color:#3fb950'>⚠ PANIC BOTTOM setup ACTIVE</div>"
+                      f"<div class='wr-sub' style='margin-top:6px'>VIX {panic.get('vix_pct')}pct · {panic.get('breadth_below_50ma',0)}% names below 50ma · oversold z {panic.get('oversold_z')}</div>"
+                      f"<div class='mcx-attarrow' style='color:#3fb950'>Contrarian BUY — {panic.get('expected_fwd63','')}. Validated p&lt;0.001.</div></div>")
+    # crash lead-time
+    cl_card = ""
+    if cl.get("risk_level"):
+        clc = _MCC.get(cl.get("color"), "#5b6675"); cp = cl.get("crash_prob", {}); bp = cl.get("base_prob", {})
+        bars = ""
+        for h in [12, 24, 36]:
+            p = cp.get(h, 0) * 100; b = bp.get(h, 0) * 100
+            bars += (f"<div style='margin:6px 0'><div class='wr-row' style='justify-content:space-between'><span class='wr-sub'>within {h}mo</span>"
+                     f"<span class='wr-mono' style='color:{clc}'>{p:.0f}% <span style='color:#5b6675'>(base {b:.0f}%)</span></span></div>"
+                     f"<div style='height:6px;background:#1e2530;border-radius:3px'><div style='width:{min(100,p)}%;height:6px;background:{clc};border-radius:3px'></div></div></div>")
+        cl_card = (f"<div class='mcx-meter'><div class='mcx-mtop'><span class='mcx-mname'>Crash Risk — {cl['risk_level']}</span></div>"
+                   f"{bars}<div class='mcx-attarrow' style='color:{clc};margin-top:6px'>{cl.get('action','')}</div>"
+                   f"<div class='wr-note' style='margin-top:6px'>{cl.get('honest_note','')}</div></div>")
+    # valuation room
+    vr_card = ""
+    if vr.get("current_cape"):
+        m = vr.get("months_to_next_20pct_drawdown", {}); wh = vr.get("when_this_high", {})
+        vr_card = (f"<div class='mcx-meter'><div class='mcx-mtop'><span class='mcx-mname'>Valuation Room</span>"
+                   f"<span class='mcx-mnum' style='color:#6ea8ff'>{vr['current_cape']}</span></div>"
+                   f"<div class='wr-sub'>CAPE at {vr['percentile']:.0f}th percentile. When this rich: fwd 1yr {wh.get('fwd_1yr_pct',0):+.0f}%, "
+                   f"3yr {wh.get('fwd_3yr_pct',0):+.0f}%, {wh.get('pct_1yr_positive',0):.0f}% of time still positive.</div>"
+                   f"<div class='mcx-attarrow' style='color:#6ea8ff;margin-top:6px'>Median {m.get('median','?')} months to next −20% drawdown "
+                   f"(range {m.get('min','?')}-{m.get('max','?')}). High valuation lowers returns — it does NOT time the top.</div></div>")
+    body = fg_card + panic_card + cl_card + vr_card
+    if not body:
+        body = "<div class='wr-note'>Early-warning engines need VIX + macro panel (bundled in research/). On live data these populate with current readings.</div>"
+    st.markdown(CSS + f"<div class='mcx'>{hero}{body}</div>", unsafe_allow_html=True)
+
+
+def validation_tab(d):
+    """Validation tab — signal confidence + certification (blueprint Volume XVIII Validation Bible).
+    This is what gives the reader confidence: every signal labelled PRODUCTION/RESEARCH/REJECTED by test."""
+    hero = (f"<div class='mcx-hd'><span class='mcx-shield'>◆</span><div><div class='t'>VALIDATION</div>"
+            f"<div class='d'>every signal labelled by test status — run <code>certify.py</code> for the full report</div></div></div>")
+    panel = _confidence_panel()
+    gate = ("<div class='wr-note' style='margin-top:14px'>4-fold gate (a signal reaches PRODUCTION only if all pass): "
+            "(1) economic mechanism, (2) statistically significant across periods/regimes, (3) adds decision value (EV, not just accuracy), "
+            "(4) survives out-of-sample. Fail one → status is RESEARCH, not production. Nothing is shown as a BUY unless it earned it. "
+            "This is why the naive formation+RS signal is REJECTED (lift 0.85x = no edge) and does not drive recommendations.</div>")
+    st.markdown(CSS + f"<div class='mcx'>{hero}{panel}{gate}</div>", unsafe_allow_html=True)

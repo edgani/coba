@@ -348,3 +348,20 @@ research/macro_panel.parquet (72KB).
 
 Modul turn-turn terakhir (semua data real + teruji + otomatis via certify.py):
 signal_edge · causal_attribution · early_warning · data_ingest · macro_regime · backtest · certify
+
+---
+
+# LANJUTAN — 3 tab baru (blueprint-aligned) + TAB_SPEC + rotation
+
+Cocokin ke blueprint lu (TAB_SPEC.md = pemetaan lengkap tab→Volume→engine→status). Tambah 3 tab yang
+blueprint wajibin tapi belum ada, semua feed dari engine TERUJI:
+- **Cross-Asset Macro** (VIII+III): risk-on/off timing, dollar-hub links, quad playbook, inflation play.
+- **Early Warning** (#386-400): fear-greed gauge, panic-bottom, crash lead-time 12/24/36mo, valuation room.
+- **Validation** (XVIII Validation Bible): signal confidence PRODUCTION/RESEARCH/REJECTED per engine +
+  4-fold gate. INI yang bikin pembaca yakin — tiap sinyal ada status teruji.
+
+Total 20 tab, correlated things dikelompokkan (ga mencar). Rotation diuji → deskriptif bukan prediktif
+(§11), di-flag jujur. TAB_SPEC.md cantumin yang belum sesuai (Bonds tab, Decision Journal penuh, dll).
+
+File: warroom/render.py (+3 render func +confidence CSS), app.py (20 tab), TAB_SPEC.md (baru),
+research/RESEARCH_FINDINGS.md §11.

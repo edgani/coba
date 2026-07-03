@@ -308,3 +308,18 @@ Lu minta COT, open interest, options/Greeks. Status:
 - **Options/Greeks/open-interest historis**: ini data PROPRIETARY/MAHAL (OPRA, CBOE DataShop). TIDAK ada
   gratis di domain yang bisa gw akses. Gw ga akan pura-pura punya. Kalau lu punya sumbernya (mis. langganan),
   engine bisa dibangun & diuji. Sampai itu ada, gw ga masukin sinyal options — biar ga jadi asal bunyi.
+
+---
+
+## 11. MONEY ROTATION — jujur: deskriptif, bukan prediktif (sektor/aset)
+
+Pertanyaan lu: "tangkap money rotation — DM→EM→frontier, silver→gold→oil, stock-to-stock." Diuji:
+- **Cross-asset rotation** (stocks/gold/oil/dollar): leader momentum outperform bulan depan cuma **50%**
+  (coin flip), spread +0.30%/mo p=0.53 → **TIDAK prediktif.**
+- **Sector rotation** (S&P 11 sektor): top sektor outperform **54%**, excess +0.15%, p=0.66 → **lemah.**
+- **Individual-stock RS top-decile**: lift 2x (§5) → **SATU rotasi yang teruji.**
+
+Kesimpulan: rotation MAP berguna buat konteks ("capital lagi ngalir ke Consumer/Industrials, keluar dari
+Utilities") TAPI momentum rotasi sektor/aset **ga bisa diandalkan buat prediksi rotasi berikutnya.** Yang
+actionable = rotasi ke nama RS-top-decile. Silver/EM/frontier belum bisa diuji (data ke-block). Engine:
+`rotation.py` (RRG map, di-flag deskriptif). Ini di Cross-Asset Rotation tab, dengan disclaimer jujur.
