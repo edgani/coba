@@ -365,3 +365,18 @@ Total 20 tab, correlated things dikelompokkan (ga mencar). Rotation diuji → de
 
 File: warroom/render.py (+3 render func +confidence CSS), app.py (20 tab), TAB_SPEC.md (baru),
 research/RESEARCH_FINDINGS.md §11.
+
+---
+
+# LANJUTAN — Ticker align ke attachment + tab redesign (20→13)
+
+- **Ticker di-align ke attachment lu**: universe nambah SUPPLY_CHAIN (nama consensus_heatmap + bottleneck
+  ref: MU/AVGO/COHR/CRDO/AAOI/AXTI/LITE/GLW/APH/FORM/SITM/AEHR/ALAB/CIEN/QCOM/ARM/SMCI/TSM/dst). 207 nama,
+  di-map ke thesis. Intl names (Samsung/SK Hynix/TSMC/Innolight) via data_ingest.ensure() di mesin lu.
+- **Tab redesign 20→13** dikelompokkan: Macro & Regime (cross-asset+state+command), Alpha & Tickers
+  (alpha+US+fairvalue), Flow & Rotation, Knowledge Graph (chains+bottleneck), Brief, Portfolio.
+- JUJUR di TAB_SPEC.md: supply-chain names belum di-backtest (butuh data lu); kedalaman konten per-tab
+  (Company Cards, Theme Library) belum penuh; ga bisa klaim 100% sesuai 19 attachment.
+
+File: warroom/data.py (SUPPLY_CHAIN +universe), market_cap_target.py (thesis map), app.py (13 tab),
+TAB_SPEC.md (rewrite).

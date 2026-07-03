@@ -40,34 +40,41 @@ def main():
             BE.export(d)   # regenerate the interactive briefing deck (briefing.html) with today's data
         except Exception:
             pass
-    tabs = st.tabs(["Mission Control", "Cross-Asset Macro", "Early Warning", "Validation",
-                    "Morning Brief", "Briefing", "Command Center", "Alpha Center", "Cross-Asset Rotation",
-                    "Causal Chains", "US Stocks", "Crypto", "Commodities", "FX", "IHSG", "Flow", "Bottleneck",
-                    "Market State", "Track Record", "Risk & Health"])
-    with tabs[0]: R.mission_control(d)
-    with tabs[1]: R.cross_asset_macro(d)
-    with tabs[2]: R.early_warning_tab(d)
-    with tabs[3]: R.validation_tab(d)
-    with tabs[4]: R.morning_brief(d)
-    with tabs[5]: R.briefing_embed()
-    with tabs[6]: R.command_center(d, source)
-    with tabs[7]: R.alpha(d)
-    with tabs[8]: R.cycle_rotation(d)
-    with tabs[9]: R.causal_chains(d)
-    with tabs[10]:
+    # Redesigned: 13 logically-grouped tabs (correlated things together, not scattered).
+    tabs = st.tabs(["Mission Control", "Macro & Regime", "Early Warning", "Alpha & Tickers",
+                    "Crypto", "Commodities", "FX", "IHSG",
+                    "Flow & Rotation", "Knowledge Graph", "Validation", "Brief", "Portfolio"])
+    with tabs[0]:                       # HUB: today's attention, meters, top signals
+        R.mission_control(d)
+    with tabs[1]:                       # MACRO cluster: cross-asset playbook + regime state + decision engine
+        R.cross_asset_macro(d)
+        R.market_state(d)
+        R.command_center(d, source)
+    with tabs[2]:                       # RISK timing: panic/fear-greed/crash-lead/valuation
+        R.early_warning_tab(d)
+    with tabs[3]:                       # ALPHA: where the tickers come out — ranking + decision market + US names + fair value
+        R.alpha(d)
         R.us_stocks(d)
         R.fair_value_cards(d)
-    with tabs[11]: R.crypto(d)
-    with tabs[12]: R.commodities(d)
-    with tabs[13]: R.fx(d)
-    with tabs[14]: R.ihsg(d)
-    with tabs[15]: R.flow(d)
-    with tabs[16]:
+    with tabs[4]: R.crypto(d)           # per-market DNA (blueprint keeps these distinct)
+    with tabs[5]: R.commodities(d)
+    with tabs[6]: R.fx(d)
+    with tabs[7]: R.ihsg(d)
+    with tabs[8]:                       # FLOW cluster: rotation map + ETF/sector flow
+        R.cycle_rotation(d)
+        R.flow(d)
+    with tabs[9]:                       # KNOWLEDGE GRAPH cluster: causal chains + bottleneck + node template
+        R.causal_chains(d)
         R.bottleneck(d)
         R.node_template(d)
-    with tabs[17]: R.market_state(d)
-    with tabs[18]: R.track_record(TR.performance(), TR.open_positions(), TR.closed_trades())
-    with tabs[19]: R.risk_health(d)
+    with tabs[10]:                      # META: signal confidence / certification
+        R.validation_tab(d)
+    with tabs[11]:                      # BRIEF cluster: morning brief + reasoning narrative
+        R.morning_brief(d)
+        R.briefing_embed()
+    with tabs[12]:                      # PORTFOLIO cluster: track record + risk & health
+        R.track_record(TR.performance(), TR.open_positions(), TR.closed_trades())
+        R.risk_health(d)
 
 
 if __name__ == "__main__":
