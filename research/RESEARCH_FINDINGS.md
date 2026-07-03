@@ -323,3 +323,27 @@ Kesimpulan: rotation MAP berguna buat konteks ("capital lagi ngalir ke Consumer/
 Utilities") TAPI momentum rotasi sektor/aset **ga bisa diandalkan buat prediksi rotasi berikutnya.** Yang
 actionable = rotasi ke nama RS-top-decile. Silver/EM/frontier belum bisa diuji (data ke-block). Engine:
 `rotation.py` (RRG map, di-flag deskriptif). Ini di Cross-Asset Rotation tab, dengan disclaimer jujur.
+
+---
+
+## 12. VALIDASI NAMA SUPPLY-CHAIN LU (data real 2013-2018)
+
+12 nama supply-chain dari attachment lu ada di data S&P 2013-2018. RS top-decile entry/exit:
+
+| ticker | best entry→exit | return | compounded |
+|---|---|---|---|
+| **AMD** | 2016-03-11 $2.52 → $12.09 | **+380%** | +239% |
+| **MU** | 2016-08-10 $14.20 → $27.49 | +94% | +260% |
+| **AMAT** | 2016-03-11 $20.04 → $42.03 | +110% | +110% |
+| **AVGO** | 2014-01-09 $53.23 → $124.21 | +133% | +112% |
+| LRCX | 2017-05-11 $149.92 → $186.46 | +24% | +62% |
+| NVDA | 2015-10-09 $26.07 → $36.06 | +38% | +42% |
+| GLW/KLAC/QCOM | — | +2-7% | ~flat |
+
+32 trades total: **win 66%, avg +26%, median +3.7%.** RS-ranking NANGKEP semikonduktor lu di bottom
+dengan entry/exit konkret. TAPI konsentrasi di AMD/MU/AVGO yang drive — sebagian ga lari.
+
+**Per-nama momentum absolut: TETAP no-edge** (semua p>0.56). Konfirmasi ulang: yang jalan = RS
+cross-sectional ranking (masuk saat top-decile, keluar saat drop out), BUKAN barrier momentum per-nama.
+Basis ticker dashboard = RS top-decile (di antara universe termasuk nama attachment lu). Reproduce:
+`run_research.py --tickers cache_lu.parquet` di data lengkap lu (termasuk era PLTR/SNDK + nama intl).

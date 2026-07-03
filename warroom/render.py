@@ -1847,3 +1847,38 @@ def decision_journal_tab(d):
                 "separately from OUTCOME — a sound decision with a bad short-term result is still good (Volume XXIV).</div>")
     note = (f"<div class='wr-note' style='margin-top:10px'>{s.get('note','')}</div>")
     st.markdown(CSS + f"<div class='mcx'>{hero}{kpi}<div style='margin-top:10px'>{rows}</div>{note}</div>", unsafe_allow_html=True)
+
+
+def theme_library(d):
+    """Theme Library (blueprint Part 8) — organize names by theme/layer from your research + supply-chain map."""
+    ref = _load_bottleneck()
+    rot = ref.get("institutional_rotation", [])
+    layers = ref.get("photonics_12_layer", [])
+    ch = ref.get("consensus_heatmap", [])
+    if not rot and not layers:
+        return
+    hero = ("<div class='mcx-lbl'>Theme Library — names organized by theme & supply-chain layer (your research)</div>")
+    # group consensus names by layer
+    by_layer = {}
+    for r in ch:
+        by_layer.setdefault(r.get("layer", "Other"), []).append((r.get("ticker"), r.get("stars", 0)))
+    blocks = ""
+    for layer, names in sorted(by_layer.items(), key=lambda x: -max(n[1] for n in x[1])):
+        names_s = sorted(names, key=lambda x: -(x[1] or 0))
+        chips = " ".join(f"<span style='background:#1a2230;color:#c9d4e0;padding:2px 8px;border-radius:6px;font-size:11px;margin:2px'>{t} {'★'*s}</span>" for t, s in names_s[:8])
+        blocks += (f"<div class='mcx-attcard' style='border-left-color:#6ea8ff;margin-bottom:8px'>"
+                   f"<div class='mcx-atttitle'>{layer}</div><div style='margin-top:6px'>{chips}</div></div>")
+    # supply-chain layers (photonics 12-layer)
+    chain_html = ""
+    if layers:
+        chain_html = "<div class='mcx-lbl' style='margin-top:18px'>Photonics 12-Layer Supply Chain (bottleneck depth)</div><div class='mcx-cf'>"
+        for l in layers:
+            mono = l.get("monopoly", ""); risk = l.get("geopolitical_risk", "")
+            rc = "#f85149" if "HARD" in str(mono) or risk == "HIGH" else "#d6a429" if risk == "MEDIUM" else "#8b97a7"
+            chain_html += (f"<div class='mcx-cfrow'><span class='mcx-cfbadge' style='color:{rc};background:{rc}1a'>{l.get('layer','')}</span>"
+                           f"<span class='mcx-cfname'>{l.get('name','')}</span>"
+                           f"<span class='mcx-cfwhy'>{l.get('leader','')} · {mono} · geo-risk {risk}</span></div>")
+        chain_html += "</div>"
+    note = ("<div class='wr-note'>Themes and layers from your curated supply-chain research. Bottleneck layers with HARD monopoly "
+            "+ HIGH geopolitical risk are the structural chokepoints — where pricing power (and thesis upside) concentrates.</div>")
+    st.markdown(CSS + f"<div class='mcx'>{hero}<div style='margin-top:10px'>{blocks}</div>{chain_html}{note}</div>", unsafe_allow_html=True)

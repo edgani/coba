@@ -66,6 +66,7 @@ def main():
     with tabs[9]:                       # KNOWLEDGE GRAPH cluster: chains + bottleneck + company cards + catalysts
         R.causal_chains(d)
         R.knowledge_cards(d)
+        R.theme_library(d)
         R.catalyst_timeline(d)
         R.bottleneck(d)
         R.node_template(d)
