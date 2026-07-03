@@ -34,6 +34,19 @@ def build(d):
     cg = d.get("country_regime") or {}
     dm = d.get("decision_market") or {}
     ew = d.get("early_warning") or {}
+    mr = d.get("macro_regime") or {}
+
+    # Cross-asset macro regime: aggressive/defensive timing (TESTED, predicts drawdown)
+    rr = mr.get("risk_regime") or {}
+    if rr.get("verdict"):
+        items.append({"title": f"Risk Regime: {rr['verdict']}", "status": f"score {rr.get('score')}/3 · exp 6mo DD {rr.get('expected_fwd6_maxDD')}",
+                      "arrow": rr.get("action", "")[:50], "urg": 70 if "AGGRESSIVE" in rr["verdict"] or "DEFENSIVE" in rr["verdict"] else 50,
+                      "color": rr.get("color", "amb")})
+    mq = mr.get("macro_quad") or {}
+    ip = mr.get("inflation_play") or {}
+    if mq.get("quad"):
+        items.append({"title": f"Macro: {mq['quad']}", "status": f"long {mq.get('long')} · short {mq.get('short')}",
+                      "arrow": (ip.get("play", "") or "")[:50], "urg": 48, "color": "inf"})
 
     # 0. PANIC BOTTOM (validated contrarian, p<0.001) — highest priority when active
     panic = ew.get("panic") or {}

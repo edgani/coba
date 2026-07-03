@@ -1,5 +1,5 @@
 # RESEARCH CERTIFICATION REPORT
-generated: 2026-07-03 01:54 · gate = mechanism + statistical + value-add + out-of-sample
+generated: 2026-07-03 02:10 · gate = mechanism + statistical + value-add + out-of-sample
 
 data: 482 tickers, 2013-02-08→2018-02-07
 
@@ -37,6 +37,12 @@ data: 482 tickers, 2013-02-08→2018-02-07
   → high valuation lowers return, does NOT time top. Show this on dashboard, not a sell signal.
   status: ✅ PRODUCTION — valuation context validated
 
+## 7. Cross-Asset Macro — risk-on/off timing + playbook
+  risk-on score vs fwd 6mo drawdown: corr +0.250 (p=0.0000) — higher score = smaller DD
+  → AGGRESSIVE at score 3 (DD ~-2.8%), DEFENSIVE at score 0 (DD ~-7.7%)
+  dollar-hub: dollar↔gold corr -0.224 (p=0.0000) — short dollar = long gold/oil (tested)
+  status: ✅ PRODUCTION — risk-timing & dollar-hub validated
+
 ---
 ## SUMMARY
 - Ticker edge: cross-sectional RS top-decile (lift 2x) → RESEARCH (alpha not yet significant). Use as basis, not proven.
@@ -45,5 +51,6 @@ data: 482 tickers, 2013-02-08→2018-02-07
 - Euphoria-top: RESEARCH (weak in bull data — needs 2008/2020/2022).
 - Macro attribution: crashes are multi-driver & largely unpredictable (R²~3%). No single-cause claims.
 - Valuation: context for risk-sizing, not market timing.
+- Cross-asset: dollar is the tested hub; risk-on/off regime predicts drawdowns (p<0.001) → aggressive/defensive timing.
 
 Discipline: nothing reaches PRODUCTION without passing all four gates. Everything traceable to a test.

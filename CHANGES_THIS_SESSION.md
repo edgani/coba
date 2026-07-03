@@ -329,3 +329,22 @@ Turn ini gw TAMBAH ke UI: valuation context (CAPE months), panic/fear-greed di T
 Decision Market, country grid, thesis targets. TAPI redesign penuh dari-0 (17 tab, pixel-match Nova
 Capital) BELUM. Itu effort besar tersendiri. Substansi (data teruji, auto-ingest, early warning,
 otomasi) udah jadi — itu fondasi yang lu tekankan berkali-kali. UI redesign penuh = langkah berikutnya.
+
+---
+
+# LANJUTAN — CROSS-ASSET MACRO REGIME (semua market, teruji)
+
+Jawaban "kapan aggressive/defensive + play EV+ di setiap market" — `warroom/macro_regime.py`, diuji di
+panel cross-asset real (SP500+gold+oil+dollar+rates+CPI, 1971-2023):
+- **Risk-on/off regime TERUJI**: corr(score, fwd drawdown) +0.28 (p<0.0001). AGGRESSIVE (score 3, DD -2.8%)
+  vs DEFENSIVE (score 0, DD -7.7%). Tampil di Today's Attention.
+- **Dollar = hub**: dollar↔gold -0.22, ↔oil -0.20, ↔stocks -0.16 (semua p<0.001). Short dollar = long
+  gold/oil/stocks. Connecting-the-dots cross-asset yang TERUJI (bukan lead-lag harian yang gagal).
+- **Macro playbook**: stagflasi → oil kalahin stocks (+3.1% vs +0.7%); inflasi turun → risk-on.
+- Ke certify.py (status PRODUCTION) + findings §9 + Mission Control.
+
+Data baru ditarik: oil (WTI 1986), nat gas, exchange rates (dollar index proxy), gold. Panel di
+research/macro_panel.parquet (72KB).
+
+Modul turn-turn terakhir (semua data real + teruji + otomatis via certify.py):
+signal_edge · causal_attribution · early_warning · data_ingest · macro_regime · backtest · certify

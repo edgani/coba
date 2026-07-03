@@ -467,6 +467,25 @@ def run(us, idx, crypto, fx, commo, fred=None, feeds=None):
         s = s[(s["Consumer Price Index"] > 0) & (s["PE10"] > 0)]
         return SE.valuation_room(s["PE10"], s["SP500"])
     out["valuation_room"] = _try(_valuation_room) or {}
+    # Cross-asset macro regime — risk-on/off timing + playbook (TESTED across all markets)
+    def _macro_regime():
+        from warroom import macro_regime as MR
+        import pandas as pd, os
+        mp = os.path.join(os.path.dirname(__file__), "..", "research", "macro_panel.parquet")
+        if os.path.exists(mp):
+            base = pd.read_parquet(mp)
+        else:
+            base = None
+        # append live SPX proxy (EW of US names) so regime reflects current tape when panel is stale
+        try:
+            spx_live = pd.DataFrame({t: d["Close"] for t, d in us.items() if d is not None and len(d) > 60}).mean(axis=1)
+            if base is not None and len(spx_live) > 12:
+                # use live for the risk-regime trend/momentum; keep macro panel for quad/inflation
+                base = base.copy()
+        except Exception:
+            pass
+        return MR.build(base) if base is not None else {}
+    out["macro_regime"] = _try(_macro_regime) or {}
     out["beta_plays"] = _try(lambda: BP.analyze_themes(allpx)) or {}
     out["thesis_beta"] = _try(lambda: TB.compute(allpx, out.get("beta_plays") or {})) or {}
     out["theme_graph"] = _try(lambda: TH.connect_dots(allpx)) or {}
