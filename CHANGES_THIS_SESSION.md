@@ -256,3 +256,49 @@ First yang lu tulis sendiri.
 - `warroom/calibrate_lpm.py` — CLI tool, import `from lpm` broken (jalan cuma dari dalam warroom/)
 - `warroom/walkforward.py` — masih di-refer run_validation (deflated_note); JANGAN hapus
 Gw ga hapus karena risiko mecahin UI yang ga bisa gw test penuh di sandbox > manfaat. __pycache__ udah kebuang.
+
+---
+
+# LANJUTAN — DATA REAL + CAUSAL ATTRIBUTION (turn ini yang paling substansial)
+
+## Breakthrough: gw dapet DATA REAL (akhirnya)
+
+Masalah inti semua keluhan lu — "ticker sampah/asal bunyi" — akarnya: sandbox ga bisa Yahoo/FRED, jadi
+semua run pakai sintetis. **Turn ini gw tarik data REAL dari GitHub** (domain yang diizinin):
+- S&P 500 harian 505 nama, 2013-2018 (`all_stocks_5yr.csv`, 619k baris)
+- Shiller: SP500+CAPE+CPI+earnings+rates, 1871-2026 (current)
+- VIX harian 1990-2026 (nyampe COVID 82.7, 2022 36.5)
+
+## Ticker validation di data REAL → 0/45 LOLOS (temuan brutal tapi jujur)
+
+Test sinyal dashboard (formation BULLISH + RS>0 → Long) di 483 nama real, walk-forward + bootstrap:
+- **0/45 kandidat teratas lolos gate.** Bootstrap p 0.39-1.0 → **ga ngalahin random.** Expectancy
+  positif = beta (market naik), bukan alpha.
+- Momentum factor IC: 0.019-0.024, p>0.36 → **tidak signifikan.**
+- **Ini bukti "beli X karena quad" = asal bunyi.** Sinyalnya belum kebukti. Gate wajib enforce.
+
+## Causal Attribution → jawaban pertanyaan lu (sebab tunggal vs hidden)
+
+`warroom/causal_attribution.py` (BARU) — multi-factor regression + decomposition (Level 3-4 + Volume IX).
+Dijalankan di 1820 bulan real (1872-2023):
+
+- **"2022 = inflasi doang?" BUKAN.** CPI tidak signifikan (t=-0.82). Mekanisme = rate-change (t=-3.70) +
+  valuasi. Inflasi cuma katalis.
+- **"Bull run = QE doang?" BUKAN.** 60-62% return 2013-2021 = earnings growth, bukan multiple expansion.
+- **"COVID = COVID doang?" IYA** (jujur). VIX 16 tenang sebelumnya, shock eksogen murni. Kadang sebab
+  yang keliatan MEMANG sebabnya — disiplinnya nguji, bukan maksa cari hidden.
+- **Hidden metric terkuat = prior volatility** (t=-6.53), bukan narasi makro.
+- **R²=3.3%** → makro standar cuma jelasin 3.3% variance crash → crash sebagian besar TAK terprediksi.
+- **2008 invisible ke makro** → butuh data kredit/leverage. Bukti perlu data tambahan, bukan ngarang.
+
+## File turn ini
+- `warroom/causal_attribution.py` (BARU) — multi-driver, decomposition, confounding detection
+- `run_research.py` (BARU) — reproduce semua di data lu: `--macro`, `--tickers PANEL`, `--all`
+- `research/RESEARCH_FINDINGS.md` — temuan lengkap + angka
+- `research/*.parquet` + `shiller.csv` + `vix.csv` — hasil + data (panel 13MB di-drop; ada fetch helper)
+- `research/fetch_sample_data.py` — regenerate panel
+- (updated) `run_validation.py` — + causal-illusion test (16 PASS sekarang)
+
+## Cara pakai di data LU
+`python research/fetch_sample_data.py && python run_research.py --all` (sample), atau
+`python run_research.py --tickers your_cache.parquet` (data lu, multi-regime 2008-2026 → hasil lebih kuat).

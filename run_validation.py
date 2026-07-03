@@ -68,6 +68,16 @@ def phase0_architecture():
     pkg = DC.build(s, {"structural": "Quad 1", "defensive": False}, chains=[])
     rec("P0", "no fabricated levels when risk-range absent (withhold)", "PASS" if pkg["levels_withheld"] else "FAIL")
 
+    # 0.6 causal attribution engine (Level 3-4: multi-driver, no single-cause fabrication)
+    from warroom import causal_attribution as CA
+    import numpy as np
+    rng=np.random.default_rng(0); n=400
+    conf=rng.normal(0,1,n); driver=0.6*conf+rng.normal(0,1,n); target=-0.5*driver+rng.normal(0,1,n)
+    r=CA.univariate_vs_multivariate(target,{"real_driver":driver,"confounded_proxy":conf})
+    caught = "confounded_proxy" in (r.get("confounded_illusions") or [])
+    rec("P0","causal attribution catches single-cause illusion","PASS" if caught else "INFO",
+        "multi-factor regression separates real driver from confounded proxy" if caught else "synthetic case inconclusive")
+
     # 0.5 meters computed from price proxies (not stubbed 'needs data feed')
     from warroom import meters as MET
     us_small = {t: __import__("warroom.data", fromlist=["_synth"])._synth(t, 300) for t in ["SPY", "JNK", "LQD", "IEF", "TLT", "SMH", "URA", "INDA", "NLR", "BOTZ", "ITA", "XLU", "VST", "GEV", "CCJ", "SOXX"]}

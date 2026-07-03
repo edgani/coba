@@ -1425,6 +1425,14 @@ def mission_control(d):
     .mcx-recpill{font-size:11px;font-weight:750;padding:2px 9px;border-radius:6px;letter-spacing:.04em}
     .mcx-recname{font-size:17px;font-weight:730}
     .mcx-recsub{font-size:12px;color:#8b97a7}
+    .mcx-recthesis{font-size:11.5px;color:#aeb9c7;margin-top:6px;padding-top:5px;border-top:0.5px solid #222833}
+    .mcx-reckill{font-size:10.5px;color:#7d8898;margin-top:3px;opacity:.85}
+    .mcx-att{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:9px;margin:6px 0 8px}
+    .mcx-attcard{background:#12161d;border:0.5px solid #232a32;border-radius:10px;padding:11px 13px;border-left-width:3px}
+    .mcx-attnum{float:right;font-size:11px;color:#5b6675;font-variant-numeric:tabular-nums}
+    .mcx-atttitle{font-size:13px;font-weight:700;color:#e8edf2;margin-bottom:3px}
+    .mcx-attstat{font-size:11.5px;color:#9aa6b2}
+    .mcx-attarrow{font-size:11px;font-weight:600;margin-top:4px}
     .mcx-flow{display:flex;align-items:center;gap:9px;flex-wrap:wrap;background:#12161d;border:1px solid #1e2530;border-radius:13px;padding:15px 18px}
     .mcx-node{background:#0f1520;border:1px solid #1e2530;border-radius:9px;padding:8px 14px;font-size:13px;font-weight:620}
     .mcx-arrow{color:#5b6675;font-size:15px}
@@ -1461,7 +1469,7 @@ def mission_control(d):
     tiles = "<div class='mcx-tiles'>" + "".join(tile(m) for m in top5) + "</div>"
     meters_html = "<div class='mcx-lbl'>Meters</div>" + "".join(meter(m) for m in meters)
 
-    # recommendations from conviction
+    # recommendations from conviction — now enriched with decision package (convexity, alpha tier, kill)
     recs = ""
     for r in (d.get("conviction") or [])[:4]:
         dr = r.get("_dir")
@@ -1471,9 +1479,23 @@ def mission_control(d):
             cls, pill, pc = "reduce", "REDUCE", "#f85149"
         else:
             cls, pill, pc = "wait", "WAIT", "#d6a429"
+        pkg = r.get("decision_pkg") or {}
+        mct = pkg.get("mcap_target") or {}
+        cx = mct.get("convexity") or {}
+        extra2 = ""
+        if cx.get("ev_pct") is not None:
+            tier = mct.get("alpha_tier", ""); tc = "#3fb950" if ("STRATEGIC" in tier or "GENERATIONAL" in tier) else "#d6a429"
+            sc = mct.get("scenarios") or {}
+            extra2 = (f"<div class='mcx-recthesis'>thesis {sc.get('thesis_label','')}: "
+                      f"bull ${(sc.get('bull') or {}).get('px','—')} / bear ${(sc.get('bear') or {}).get('px','—')} · "
+                      f"EV <b style='color:{tc}'>{cx['ev_pct']:+.0f}%</b> · tail {cx.get('tail_ratio','—')} · "
+                      f"<span style='color:{tc}'>{tier}</span></div>")
+            kill = (mct.get("kill_thesis") or [])[:1]
+            if kill:
+                extra2 += f"<div class='mcx-reckill'>kill: {kill[0]}</div>"
         recs += (f"<div class='mcx-rec {cls}'><div class='mcx-rectop'><span class='mcx-recpill' style='background:{pc}22;color:{pc}'>{pill}</span>"
                  f"<span class='mcx-recname'>{r.get('ticker','?')}</span></div>"
-                 f"<div class='mcx-recsub'>${r.get('px','—')} &middot; entry {r.get('entry','—')} &middot; stop {r.get('stop','—')} &middot; target {r.get('target','—')}</div></div>")
+                 f"<div class='mcx-recsub'>${r.get('px','—')} &middot; entry {r.get('entry','—')} &middot; stop {r.get('stop','—')} &middot; target {r.get('target','—')}</div>{extra2}</div>")
     recs_html = ("<div class='mcx-lbl'>Highest Conviction</div><div class='mcx-recs'>" + recs + "</div>") if recs else ""
 
     # money rotation flow from compass
@@ -1497,9 +1519,27 @@ def mission_control(d):
                    f"<div class='mcx-cverd'>{c.get('verdict','')}</div></div>")
     chains_html = ("<div class='mcx-lbl'>Active Causal Chains</div>" + chains) if chains else ""
 
-    note = ("<div class='mcx-note'>Design matches the mockup spec. 4 meters carry real data (Macro from regime probs, Crash, Rotation, Entry, Conviction); "
-            "Liquidity / Credit / Bubble / Wealth / Trend are greyed &mdash; no live feed yet, not faked. On synthetic sandbox data values are plumbing; real values populate on your machine. "
-            "Money rotation is derived from the cross-asset compass; recommendations are the top conviction setups.</div>")
+    # Today's Attention (#396) — the 6 things that matter today, at the very top
+    att = d.get("attention") or {}
+    att_html = ""
+    if att.get("items"):
+        _AC = {"grn": "#3fb950", "red": "#f85149", "amb": "#d6a429", "inf": "#6ea8ff", "gry": "#5b6675"}
+        cards = ""
+        for it in att["items"]:
+            col = _AC.get(it.get("color"), "#5b6675")
+            cards += (f"<div class='mcx-attcard' style='border-left-color:{col}'>"
+                      f"<span class='mcx-attnum'>{it.get('urg',0)}</span>"
+                      f"<div class='mcx-atttitle'>{it.get('title','')}</div>"
+                      f"<div class='mcx-attstat'>{it.get('status','')}</div>"
+                      f"<div class='mcx-attarrow' style='color:{col}'>{it.get('arrow','')}</div></div>")
+        sub = f" &middot; {att['collapsed']} more collapsed" if att.get("collapsed") else ""
+        att_html = (f"<div class='mcx-lbl' style='margin-top:14px'>Today's Attention{sub}</div>"
+                    f"<div class='mcx-att'>{cards}</div>")
 
-    html = f"<div class='mcx'>{header}{tiles}{recs_html}{flow_html}{meters_html}{chains_html}{note}</div>"
+    note = ("<div class='mcx-note'>All 10 meters now compute from real data: Macro (regime probs), Crash, Rotation, Entry, Conviction from engines; "
+            "Trend/Credit/Bubble/Wealth from price proxies; Liquidity from funding-stress (FRED when wired). "
+            "Entry/stop/target come from the decision engine (stop sits outside the entry zone). Thesis targets, convexity, and alpha tier are shown per name. "
+            "On synthetic sandbox data these are plumbing; real values populate on your machine with cached data + FRED key.</div>")
+
+    html = f"<div class='mcx'>{header}{att_html}{tiles}{recs_html}{flow_html}{meters_html}{chains_html}{note}</div>"
     st.markdown(css + html, unsafe_allow_html=True)

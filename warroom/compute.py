@@ -211,14 +211,20 @@ def _setups(prices, bench_t=None, names=None, n=8, long_only=False):
         px = round(float(c.iloc[-1]), 2)
         tl = round(tl, 2); th = round(th, 2)
         nl = round(nl, 2) if nl else None; nh = round(nh, 2) if nh else None
-        if direction == "Long":
-            stop = min(tl, round(px * 0.97, 2))
-            target = max(nh if nh else px, round(px * 1.06, 2))
-            entry = f"{stop}–{px}"
-        elif direction == "Short":
-            stop = max(th, round(px * 1.03, 2))
-            target = min(nl if nl else px, round(px * 0.94, 2))
-            entry = f"{px}–{stop}"
+        # LEVELS from decision_center (stop BELOW entry zone — fixes the old entry=stop bug at source).
+        # Every tab reads these raw fields, so fixing here fixes Mission Control + all setup tabs.
+        from warroom import decision_center as DC
+        _rrd = rr if isinstance(rr, dict) and "trade" in rr else {"trade": {"lrr": tl, "trr": th}}
+        if (nl and nh) and "trend" not in _rrd:
+            _rrd = dict(_rrd); _rrd["trend"] = {"lrr": nl, "trr": nh}
+        _lv = DC.levels(direction, _rrd, px) if direction in ("Long", "Short") else None
+        if _lv and _lv.get("entry"):
+            _base = _lv["entry"].get("base")
+            entry = (f"{_base[0]}–{_base[1]}" if _base and _base[0] is not None and _base[1] is not None
+                     else f"{_lv['band'][0]}–{_lv['band'][1]}")
+            stop = (_lv.get("stops") or {}).get("technical")
+            _tg = _lv.get("targets") or {}
+            target = _tg.get("t2") or _tg.get("t1")
         else:
             stop, target, entry = None, None, f"{tl}–{th}"
         strength = abs(rs) * 2.2 + abs(mom) + abs(above50) * 0.7
@@ -592,6 +598,9 @@ def run(us, idx, crypto, fx, commo, fred=None, feeds=None):
                 markets[thk] = dm
         return markets
     out["decision_market"] = _try(_decision_market) or {}
+    # Today's Attention (#396) — 6 things that matter today, ranked from all engines above
+    from warroom import attention as ATT
+    out["attention"] = _try(lambda: ATT.build(out)) or {}
     return out
 
 
