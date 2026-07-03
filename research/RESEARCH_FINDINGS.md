@@ -114,3 +114,69 @@ python run_research.py --macro                       # crash/bull attribution (p
 
 Ganti data 2013-2018 dengan cache lu (2008-2026) → hasil multi-regime yang lebih kuat. Engine-nya
 (`causal_attribution.py`, `backtest.py`) siap; tinggal kasih makan data lu.
+
+---
+
+## 5. BISA NANGKEP PEMENANG SEBELUM LARI? (event study — jawaban pertanyaan SNDK/PLTR)
+
+Pertanyaan lu: "SNDK/PLTR naik for a reason — bisa ga dapet SEBELUM surging, di harga berapa, kapan
+keluar?" Gw uji di 482 nama S&P real 2013-2018 (PLTR/SNDK belum ada di era itu, tapi metodologinya yang
+diuji — jalanin `run_research.py --tickers cache_lu.parquet` buat era mereka).
+
+### Precision test — sinyal mana yang PUNYA edge nangkep surge (+30% dalam 63hr)?
+Base rate random: 1.7%. LIFT = P(surge|sinyal) / P(surge|random).
+
+| Sinyal | fires | hit rate | LIFT | verdict |
+|---|---|---|---|---|
+| formation + RS>0 (dashboard lama) | 203,827 | 1.5% | **0.85x** | ✗ lebih buruk dari random |
+| 60d-high breakout + volume 1.5x | 8,678 | 1.3% | 0.76x | ✗ no edge |
+| RS accelerating | 51,303 | 1.3% | 0.75x | ✗ no edge |
+| tight-base breakout | 23,599 | 1.0% | 0.58x | ✗ no edge |
+| near 52w-high + RS + volume | 11,477 | 1.0% | 0.56x | ✗ no edge |
+| volume-spike 2x + uptrend | 4,534 | 1.7% | 1.01x | ✗ coin flip |
+| **top-10% RS cross-sectional** | 55,354 | **3.6%** | **2.08x** | ✅ **EDGE** |
+
+**Temuan besar:** SEMUA sinyal absolut (breakout, volume, base) = NOL edge. Cuma **cross-sectional RS
+top-decile** yang punya tail edge (2x). Konsisten literatur momentum: ranking relatif jalan, breakout absolut engga.
+
+### Entry/exit discipline (top-decile RS strategy) — jawaban "harga berapa masuk, kapan keluar"
+Nama MASUK rekomendasi saat cross ke top-10% RS, KELUAR saat drop out. 907 trades, 55% win, avg hold 82hr.
+Contoh REAL (entry→exit, harga+tanggal):
+
+| ticker | masuk | harga | keluar | harga | return | hari |
+|---|---|---|---|---|---|---|
+| **AMD** | 2016-03-11 | $2.52 | 2017-06-12 | $12.09 | **+380%** | 458 |
+| SWKS | 2014-02-10 | $30.70 | 2015-08-11 | $88.97 | +190% | 547 |
+| AVGO | 2014-01-09 | $53.23 | 2015-08-11 | $124.21 | +133% | 579 |
+| MU | 2016-08-10 | $14.20 | 2017-08-10 | $27.49 | +94% | 365 |
+
+**YA — sistem nangkep AMD di $2.52 sebelum run 10x, dengan entry/exit konkret.** Ini yang lu mau.
+
+### TAPI — apakah ini alpha teruji? BELUM (jujur)
+Strategi 18%/thn vs benchmark 15%. Excess **p=0.41 (TIDAK signifikan)**, beta 0.86. Alpha +5%/thn TAPI
+belum kebukti di 5 tahun. **Sebagian besar return = beta (market naik).** Top-decile RS punya tail edge
+nyata (nangkep winners), tapi belum bisa diklaim alpha statistik di sample ini.
+
+**Kesimpulan jujur buat "always be the winner":** mustahil. Yang realistis & sudah gw temukan: SATU sinyal
+(cross-sectional RS top-decile) dengan tail edge yang nangkep pemenang besar. Basis ticker dashboard
+HARUSNYA ini (ranking RS relatif), BUKAN formation+RS absolut (yang terbukti 0.85x = sampah). Entry =
+masuk top-decile, exit = keluar. Alpha butuh validasi data lebih panjang (2008-2026 multi-regime).
+
+## 6. BUBBLE / VALUASI EKSTREM — berapa lama & berapa room? (jawaban Bubble=100)
+
+CAPE sekarang ~31 (persentil 95). Dari data 1871-2023:
+
+| CAPE decile | fwd 1yr | fwd 3yr | fwd 5yr | maxDD 2yr |
+|---|---|---|---|---|
+| D0 (murah 5-9) | +15% | +36% | +80% | -7% |
+| D9 (mahal 26-44) | +4% | +11% | +12% | -15% |
+
+Saat CAPE setinggi sekarang: fwd 1yr +5%, 3yr +13%, **65% waktu tetap positif**, tapi maxDD 2yr -14%.
+**Waktu dari CAPE>30 ke drawdown -20% berikutnya: median 21-26 BULAN** (min 0, max 62).
+
+**Jawaban "Bubble=100, udah peak?": TIDAK berarti jual.** Valuasi ekstrem = return ke depan lebih kecil +
+risiko ekor lebih tinggi, TAPI historis masih 2+ tahun room. Timing top mustahil. Bubble meter = ukuran
+ROOM & RISIKO, bukan sinyal jual. Engine: `signal_edge.valuation_room()`.
+
+⚠️ Bubble=100 di screenshot itu dari data SINTETIS sandbox — ga meaningful. Di data real lu, meter ini
+harus dibaca sebagai konteks risiko (turunin size, siapin hedge), bukan trigger jual.

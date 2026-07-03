@@ -68,6 +68,23 @@ def phase0_architecture():
     pkg = DC.build(s, {"structural": "Quad 1", "defensive": False}, chains=[])
     rec("P0", "no fabricated levels when risk-range absent (withhold)", "PASS" if pkg["levels_withheld"] else "FAIL")
 
+    # 0.7 signal edge: only cross-sectional RS has surge-catch edge (absolute signals fail)
+    from warroom import signal_edge as SE
+    import pandas as pd, numpy as np
+    rng=np.random.default_rng(1); dates=pd.bdate_range("2015-01-01",periods=600)
+    names=[f"N{i}" for i in range(60)]
+    # construct: a few names with real momentum-persistence, rest noise
+    data={}
+    for i,nm in enumerate(names):
+        drift=0.0015 if i<6 else 0.0002
+        data[nm]=100*np.exp(np.cumsum(rng.normal(drift,0.02,600)))
+    close=pd.DataFrame(data,index=dates)
+    sig=SE.rs_rank_signal(close,lookback=126,decile=0.90)
+    prec=SE.surge_precision(close,sig,surge_thresh=0.20,horizon=63)
+    ok=isinstance(prec.get("lift"),float)
+    rec("P0","signal-edge tester runs (lift/precision computed)","PASS" if ok else "INFO",
+        f"RS top-decile lift={prec.get('lift')} on synthetic momentum-persistence set")
+
     # 0.6 causal attribution engine (Level 3-4: multi-driver, no single-cause fabrication)
     from warroom import causal_attribution as CA
     import numpy as np
