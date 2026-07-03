@@ -1714,3 +1714,136 @@ def validation_tab(d):
             "(4) survives out-of-sample. Fail one → status is RESEARCH, not production. Nothing is shown as a BUY unless it earned it. "
             "This is why the naive formation+RS signal is REJECTED (lift 0.85x = no edge) and does not drive recommendations.</div>")
     st.markdown(CSS + f"<div class='mcx'>{hero}{panel}{gate}</div>", unsafe_allow_html=True)
+
+
+# ═══ Company Knowledge Cards + Catalyst Timeline (blueprint Part 8-9) — ticker context from YOUR research ═══
+import json as _json_kc, os as _os_kc
+
+def _load_bottleneck():
+    try:
+        p = _os_kc.path.join(_os_kc.path.dirname(__file__), "..", "data", "bottleneck_reference.json")
+        return _json_kc.load(open(p))
+    except Exception:
+        return {}
+
+def knowledge_cards(d):
+    """Company Knowledge Cards — each supply-chain name with its role, layer, star rating, catalysts,
+    thesis + convexity target + tested status. Makes every ticker traceable to YOUR research (not asal bunyi)."""
+    ref = _load_bottleneck()
+    ch = ref.get("consensus_heatmap", [])
+    cats = ref.get("catalyst_timeline", [])
+    if not ch:
+        st.markdown(CSS + "<div class='wr-note'>No bottleneck reference loaded.</div>", unsafe_allow_html=True)
+        return
+    # index catalysts by ticker
+    cat_by = {}
+    for c in cats:
+        cat_by.setdefault(c.get("ticker"), []).append(c)
+    try:
+        from warroom import market_cap_target as MC
+    except Exception:
+        MC = None
+    # get live prices/fair value for convexity
+    fv = d.get("fair_value") or {}
+    hero = (f"<div class='mcx-hd'><span class='mcx-shield'>◆</span><div><div class='t'>COMPANY KNOWLEDGE CARDS</div>"
+            f"<div class='d'>each name's role in the supply chain + thesis + catalysts (from your curated research)</div></div></div>")
+    # sort by stars desc
+    ch_sorted = sorted(ch, key=lambda x: -(x.get("stars", 0) or 0))
+    cards = ""
+    star_col = {5: "#3fb950", 4: "#3fb950", 3: "#d6a429", 2: "#d6a429", 1: "#8b97a7"}
+    for r in ch_sorted[:40]:
+        tk = r.get("ticker", "?"); stars = r.get("stars", 0) or 0
+        sc = star_col.get(stars, "#8b97a7")
+        role = r.get("role", ""); layer = r.get("layer", ""); target = r.get("target", ""); pri = r.get("priority", "")
+        starstr = "★" * stars + "☆" * (5 - stars)
+        # thesis convexity if mapped + price available
+        cx_line = ""
+        if MC:
+            thk = MC.thesis_for(tk)
+            price = None
+            if isinstance(fv.get(tk), dict):
+                price = fv[tk].get("price")
+            if price:
+                pkg = MC.build(tk, price, (fv.get(tk) or {}).get("market_cap"), 60)
+                if pkg and pkg.get("convexity"):
+                    cxv = pkg["convexity"]
+                    cx_line = (f"<div class='wr-sub' style='margin-top:4px'>thesis <b>{pkg['scenarios']['thesis_label']}</b> · "
+                               f"bull ${pkg['scenarios']['bull']['px']} / bear ${pkg['scenarios']['bear']['px']} · "
+                               f"EV {cxv['ev_pct']:+.0f}% · {pkg['alpha_tier']}</div>")
+            else:
+                cx_line = f"<div class='wr-sub' style='margin-top:4px'>thesis <b>{thk}</b> · price data needed for convexity (add to cache)</div>"
+        # catalysts
+        cat_line = ""
+        tcats = cat_by.get(tk, [])
+        if tcats:
+            cat_line = "<div class='wr-sub' style='margin-top:4px;color:#6ea8ff'>catalysts: " + " · ".join(
+                f"{c.get('quarter','')} {c.get('event','')[:40]}" for c in tcats[:2]) + "</div>"
+        cards += (f"<div class='mcx-attcard' style='border-left-color:{sc};margin-bottom:8px'>"
+                  f"<span class='mcx-attnum' style='color:{sc}'>{starstr}</span>"
+                  f"<div class='mcx-atttitle'>{tk} <span style='font-size:11px;color:#8b97a7;font-weight:400'>{layer}</span></div>"
+                  f"<div class='mcx-attstat'>{role}{(' · ' + target) if target else ''}{(' · ' + pri) if pri else ''}</div>"
+                  f"{cx_line}{cat_line}</div>")
+    note = ("<div class='wr-note'>Star rating = consensus conviction across institutional accounts (your research). "
+            "Convexity targets appear where price data is cached. This is what makes a ticker recommendation traceable: "
+            "role in the supply chain + thesis + catalysts + tested convexity — not 'buy because quad'.</div>")
+    st.markdown(CSS + f"<div class='mcx'>{hero}<div style='margin-top:10px'>{cards}</div>{note}</div>", unsafe_allow_html=True)
+
+def catalyst_timeline(d):
+    """Catalyst Timeline — upcoming events by quarter that could move names (forward-looking context)."""
+    ref = _load_bottleneck()
+    cats = ref.get("catalyst_timeline", [])
+    rot = ref.get("institutional_rotation", [])
+    if not cats and not rot:
+        return
+    hero = "<div class='mcx-lbl'>Catalyst Timeline — upcoming events (from your research)</div>"
+    rows = ""
+    pc = {"HIGH": "#f85149", "TOP": "#f85149", "MEDIUM": "#d6a429"}
+    for c in sorted(cats, key=lambda x: str(x.get("quarter", ""))):
+        col = pc.get(c.get("priority", ""), "#8b97a7")
+        rows += (f"<div class='mcx-cfrow'><span class='mcx-cfbadge' style='color:{col};background:{col}1a'>{c.get('quarter','')}</span>"
+                 f"<span class='mcx-cfname'>{c.get('ticker','')}</span>"
+                 f"<span class='mcx-cfwhy' style='margin-left:8px;text-align:left'>{c.get('event','')}</span></div>")
+    rot_html = ""
+    if rot:
+        rot_html = "<div class='mcx-lbl' style='margin-top:18px'>Institutional Rotation Phases</div><div class='mcx-cf'>"
+        for r in rot:
+            st_col = {"ACTIVE": "#3fb950", "EARLY": "#6ea8ff", "NEXT": "#d6a429"}.get(r.get("status", ""), "#8b97a7")
+            rot_html += (f"<div class='mcx-cfrow'><span class='mcx-cfbadge' style='color:{st_col};background:{st_col}1a'>{r.get('status','')}</span>"
+                         f"<span class='mcx-cfname'>{r.get('theme','')}</span>"
+                         f"<span class='mcx-cfwhy'>{r.get('timeline','')} · {(r.get('tickers','') if isinstance(r.get('tickers'),str) else ', '.join(r.get('tickers',[]))[:40])}</span></div>")
+        rot_html += "</div>"
+    st.markdown(CSS + f"<div class='mcx'>{hero}<div class='mcx-cf'>{rows}</div>{rot_html}</div>", unsafe_allow_html=True)
+
+
+def decision_journal_tab(d):
+    """Decision Journal (#399) + Decision Quality (Volume XXIV). Logs decisions, reviews process vs outcome."""
+    try:
+        from warroom import decision_journal as DJ
+    except Exception:
+        st.markdown(CSS + "<div class='wr-note'>Decision journal unavailable.</div>", unsafe_allow_html=True); return
+    entries = DJ.all_decisions(30); s = DJ.stats()
+    hero = ("<div class='mcx-lbl'>Decision Journal — every decision recorded, reviewed on process not just outcome</div>")
+    kpi = ""
+    if s.get("n"):
+        kpi = (f"<div class='mcx-tiles'>"
+               f"<div class='mcx-tile'><div class='l'>Decisions logged</div><div class='n'>{s['n']}</div></div>"
+               f"<div class='mcx-tile'><div class='l'>Sound process</div><div class='n' style='color:#3fb950'>{s.get('sound_process_pct',0)}%</div></div>"
+               f"<div class='mcx-tile'><div class='l'>Reviewed</div><div class='n'>{s.get('reviewed',0)}</div></div>"
+               f"<div class='mcx-tile'><div class='l'>Outcome win-rate</div><div class='n na'>{s.get('outcome_win_rate') or '—'}</div></div></div>")
+    rows = ""
+    for e in entries[:15]:
+        ac = {"BUY": "#3fb950", "SELL": "#f85149", "REDUCE": "#f85149"}.get(e.get("action"), "#8b97a7")
+        rows += (f"<div class='mcx-attcard' style='border-left-color:{ac};margin-bottom:7px'>"
+                 f"<span class='mcx-attnum'>{e.get('date','')}</span>"
+                 f"<div class='mcx-atttitle'>{e.get('action','')} {e.get('ticker','')} "
+                 f"<span style='font-size:11px;color:#8b97a7'>conf {e.get('confidence','')}</span></div>"
+                 f"<div class='mcx-attstat'>{e.get('reason','')}</div>"
+                 + (f"<div class='wr-sub' style='margin-top:3px'>alt: {e.get('alternative')} ({e.get('alt_confidence')}) · invalidation: {e.get('invalidation','')}</div>" if e.get('invalidation') else "")
+                 + "</div>")
+    if not entries:
+        rows = ("<div class='wr-note'>No decisions logged yet. Log via "
+                "<code>from warroom import decision_journal as DJ; DJ.log_decision('COHR','BUY','reason...',72,entry_px=95,target_px=180,invalidation='...')</code>. "
+                "After the review window (default 6mo) the dashboard reviews each decision on PROCESS quality (was the reasoning sound + EV positive) "
+                "separately from OUTCOME — a sound decision with a bad short-term result is still good (Volume XXIV).</div>")
+    note = (f"<div class='wr-note' style='margin-top:10px'>{s.get('note','')}</div>")
+    st.markdown(CSS + f"<div class='mcx'>{hero}{kpi}<div style='margin-top:10px'>{rows}</div>{note}</div>", unsafe_allow_html=True)

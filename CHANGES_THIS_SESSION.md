@@ -380,3 +380,25 @@ research/RESEARCH_FINDINGS.md §11.
 
 File: warroom/data.py (SUPPLY_CHAIN +universe), market_cap_target.py (thesis map), app.py (13 tab),
 TAB_SPEC.md (rewrite).
+
+---
+
+# LANJUTAN — Company Knowledge Cards + Catalyst Timeline + Decision Journal (blueprint Part 8-9, #399)
+
+- **Company Knowledge Cards** (`render.knowledge_cards`): tiap nama supply-chain (68 dari consensus_heatmap
+  lu) dengan role, layer, star-rating, target, katalis + thesis convexity + status. Bikin tiap ticker
+  TRACEABLE ke research lu — bukan "beli karena quad". Di tab Knowledge Graph.
+- **Catalyst Timeline** (`render.catalyst_timeline`): 16 katalis mendatang by quarter + 7 fase
+  institutional rotation dari research lu. Forward-looking context.
+- **Decision Journal** (`decision_journal.py`, #399 WAJIB + Volume XXIV): catat tiap keputusan
+  (reason/confidence/alternative/invalidation/entry/target), review setelah window (default 6mo) pada
+  PROCESS quality (sound reasoning + EV+) TERPISAH dari outcome. KPI: sound-process %, outcome win-rate.
+  Di tab Portfolio.
+
+File: warroom/render.py (+3 render), warroom/decision_journal.py (baru), app.py (wired).
+
+## STATUS AKHIR (jujur)
+Selesai: struktur 13 tab, universe align attachment, 8 engine teruji (certify.py), early warning,
+cross-asset macro, crash lead-time, knowledge cards, catalyst timeline, decision journal.
+BELUM (butuh data lu / effort besar): backtest nama supply-chain (butuh data harga lu), Bonds tab
+(butuh yield curve 2Y/credit), Theme Library depth (Part 8), options/Greeks/COT empiris (data proprietary).

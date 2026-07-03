@@ -16,10 +16,10 @@ Plus ticker universe di-align ke nama attachment lu (consensus_heatmap + supply 
 | 7 | **FX** | FX | IV (FX DNA) | FX setups |
 | 8 | **IHSG** | IHSG | IV (IHSG DNA) | IDX + bandarmologi |
 | 9 | **Flow & Rotation** | Cross-Asset Rotation + Flow | (flow) | RRG rotation map + ETF/sector flow |
-| 10 | **Knowledge Graph** | Causal Chains + Bottleneck + Node | IX + VI | Causal chains, beta propagation, supply-chain bottleneck |
+| 10 | **Knowledge Graph** | Chains + Bottleneck + Company Cards + Catalysts | IX + VI + Part 8-9 | Causal chains, **Company Knowledge Cards (68 names, role+catalysts+convexity)**, Catalyst Timeline, bottleneck |
 | 11 | **Validation** | (baru) | XVIII Validation Bible | Signal confidence PRODUCTION/RESEARCH/REJECTED + 4-fold gate |
 | 12 | **Brief** | Morning Brief + Briefing | XV + II | Daily brief + reasoning narrative |
-| 13 | **Portfolio** | Track Record + Risk & Health | XIX + Risk | Performance, trades, portfolio risk, health |
+| 13 | **Portfolio** | Track Record + **Decision Journal** + Risk & Health | XIX + #399 + Risk | Performance, trades, **Decision Journal (decision quality vs outcome)**, portfolio risk, health |
 
 ## TICKER — sekarang di-align ke attachment lu
 Universe nambah `SUPPLY_CHAIN` (data.py) = nama consensus_heatmap + bottleneck reference lu:

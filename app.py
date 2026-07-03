@@ -63,8 +63,10 @@ def main():
     with tabs[8]:                       # FLOW cluster: rotation map + ETF/sector flow
         R.cycle_rotation(d)
         R.flow(d)
-    with tabs[9]:                       # KNOWLEDGE GRAPH cluster: causal chains + bottleneck + node template
+    with tabs[9]:                       # KNOWLEDGE GRAPH cluster: chains + bottleneck + company cards + catalysts
         R.causal_chains(d)
+        R.knowledge_cards(d)
+        R.catalyst_timeline(d)
         R.bottleneck(d)
         R.node_template(d)
     with tabs[10]:                      # META: signal confidence / certification
@@ -72,8 +74,9 @@ def main():
     with tabs[11]:                      # BRIEF cluster: morning brief + reasoning narrative
         R.morning_brief(d)
         R.briefing_embed()
-    with tabs[12]:                      # PORTFOLIO cluster: track record + risk & health
+    with tabs[12]:                      # PORTFOLIO cluster: track record + decision journal + risk & health
         R.track_record(TR.performance(), TR.open_positions(), TR.closed_trades())
+        R.decision_journal_tab(d)
         R.risk_health(d)
 
 
