@@ -402,3 +402,16 @@ Selesai: struktur 13 tab, universe align attachment, 8 engine teruji (certify.py
 cross-asset macro, crash lead-time, knowledge cards, catalyst timeline, decision journal.
 BELUM (butuh data lu / effort besar): backtest nama supply-chain (butuh data harga lu), Bonds tab
 (butuh yield curve 2Y/credit), Theme Library depth (Part 8), options/Greeks/COT empiris (data proprietary).
+
+---
+
+# LANJUTAN — KNOWLEDGE GRAPH (jawaban audit inti Edward)
+
+Audit lu benar: engine masih berdiri sendiri. `warroom/knowledge_graph.py` = network terhubung yang
+menyatukannya: 61 node, 60 typed edge (sign/lead/confidence/strength/half-life/regime/evidence/tested).
+- Propagasi multi-hop 2nd/3rd/4th order (War→Oil→Tanker→Freight→Inflation→Rates→...).
+- Beta chains picks & shovels (AI→primary→2nd-deriv→3rd-deriv hidden winners).
+- 6 edge TERUJI (dollar→gold/oil/stocks p<0.001), 54 structural (di-flag jujur, bukan klaim statistik).
+- Centerpiece tab Knowledge Graph + masuk certify.py (engine #9).
+
+File: warroom/knowledge_graph.py (baru), render.py (+knowledge_graph_view), app.py (wired), certify.py.

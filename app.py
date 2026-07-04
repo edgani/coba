@@ -63,7 +63,8 @@ def main():
     with tabs[8]:                       # FLOW cluster: rotation map + ETF/sector flow
         R.cycle_rotation(d)
         R.flow(d)
-    with tabs[9]:                       # KNOWLEDGE GRAPH cluster: chains + bottleneck + company cards + catalysts
+    with tabs[9]:                       # KNOWLEDGE GRAPH cluster: connected network + chains + company cards
+        R.knowledge_graph_view(d)
         R.causal_chains(d)
         R.knowledge_cards(d)
         R.theme_library(d)

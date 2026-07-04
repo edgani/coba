@@ -1882,3 +1882,62 @@ def theme_library(d):
     note = ("<div class='wr-note'>Themes and layers from your curated supply-chain research. Bottleneck layers with HARD monopoly "
             "+ HIGH geopolitical risk are the structural chokepoints — where pricing power (and thesis upside) concentrates.</div>")
     st.markdown(CSS + f"<div class='mcx'>{hero}<div style='margin-top:10px'>{blocks}</div>{chain_html}{note}</div>", unsafe_allow_html=True)
+
+
+# ═══ KNOWLEDGE GRAPH tab (audit core) — connected network, multi-hop propagation, beta chains ═══
+def knowledge_graph_view(d):
+    """The connected graph: shock propagation (2nd/3rd/4th order) + beta chains (picks & shovels).
+    Answers 'if X happens → these consequences in order' without switching tabs."""
+    try:
+        from warroom import knowledge_graph as KG
+    except Exception:
+        st.markdown(CSS + "<div class='wr-note'>Knowledge graph unavailable.</div>", unsafe_allow_html=True); return
+    gs = KG.graph_stats()
+    hero = (f"<div class='mcx-hd'><span class='mcx-shield'>◆</span><div><div class='t'>KNOWLEDGE GRAPH</div>"
+            f"<div class='d'>{gs['nodes']} nodes · {gs['edges']} edges ({gs['tested_edges']} tested, {gs['structural_edges']} structural) — one connected network</div></div></div>")
+
+    def _chain_block(shock, direction, title, hops=4):
+        r = KG.propagate(shock, direction, max_hops=hops)
+        rows = ""
+        indent = {1: 0, 2: 16, 3: 32, 4: 48}
+        for s in r["chain"][:14]:
+            tint = "#3fb950" if s["move"] == "↑" else "#f85149"
+            tk = (" ".join(f"<span style='background:#1a2230;color:#c9d4e0;padding:1px 6px;border-radius:5px;font-size:10px'>{t}</span>" for t in s["tickers"][:4])) if s["tickers"] else ""
+            badge = "<span style='color:#3fb950;font-size:9px'>✓tested</span>" if s["tested"] else "<span style='color:#5b6675;font-size:9px'>structural</span>"
+            rows += (f"<div style='display:flex;align-items:center;gap:8px;padding:4px 0;margin-left:{indent.get(s['order'],48)}px'>"
+                     f"<span style='color:{tint};font-weight:800'>{s['move']}</span>"
+                     f"<span style='font-size:12.5px;color:#e6edf3;font-weight:600'>{s['node']}</span>"
+                     f"<span style='font-size:10px;color:#8b97a7'>{s['order']}° · conf {s['confidence']} · +{s['lead_days']}d</span>"
+                     f"{badge}<span style='margin-left:auto'>{tk}</span></div>")
+        return (f"<div class='mcx-meter'><div class='mcx-mname'>{title}</div>"
+                f"<div style='margin-top:8px'>{rows}</div></div>")
+
+    # Choose propagations relevant to current regime
+    mr = d.get("macro_regime") or {}
+    rr = mr.get("risk_regime") or {}
+    dollar_dir = "up" if not (rr.get("components", {}) or {}).get("dollar_falling", True) else "down"
+    blocks = ""
+    blocks += _chain_block("Dollar", dollar_dir, f"Dollar {dollar_dir.upper()} → cross-asset (TESTED edges)", 2)
+    blocks += _chain_block("War/Geopolitics", "up", "War / Geopolitics shock → oil complex (2nd/3rd/4th order)", 4)
+    blocks += _chain_block("AI/Compute", "up", "AI / Compute demand → deep supply chain", 3)
+    blocks += _chain_block("Fed", "up", "Fed hike → transmission (dollar, rates, liquidity)", 3)
+
+    # Beta chains (picks & shovels)
+    beta_html = "<div class='mcx-lbl' style='margin-top:16px'>Beta Chains — picks &amp; shovels (primary → 2nd → 3rd derivative)</div>"
+    for theme in ["AI/Compute", "Power", "Defense"]:
+        b = KG.beta_chain(theme, 3)
+        p1 = ", ".join(x["ticker"] for x in b["primary"][:6]) or "—"
+        p2 = ", ".join(f"{x['ticker']}({x['node']})" for x in b["second_derivative"][:5]) or "—"
+        p3 = ", ".join(f"{x['ticker']}({x['node']})" for x in b["third_derivative"][:4]) or "—"
+        beta_html += (f"<div class='mcx-attcard' style='border-left-color:#6ea8ff;margin-bottom:7px'>"
+                      f"<div class='mcx-atttitle'>{theme}</div>"
+                      f"<div class='wr-sub'>primary (crowded): {p1}</div>"
+                      f"<div class='wr-sub' style='color:#3fb950'>2nd derivative (picks & shovels): {p2}</div>"
+                      f"<div class='wr-sub' style='color:#6ea8ff'>3rd derivative (hidden): {p3}</div></div>")
+
+    note = ("<div class='wr-note'>This is the connected network: a shock at any entry point propagates through typed edges "
+            "(confidence decays each hop; lead-days show what reacts first). <b>Tested</b> edges are validated on real data "
+            "(dollar→gold/oil/stocks, p&lt;0.001); <b>structural</b> edges are economically-grounded causal knowledge for reasoning, "
+            "not statistical claims. Beta chains walk downstream to find picks &amp; shovels — the 2nd/3rd-derivative names are "
+            "often the hidden winners (less crowded than the obvious primary play).</div>")
+    st.markdown(CSS + f"<div class='mcx'>{hero}{blocks}{beta_html}{note}</div>", unsafe_allow_html=True)

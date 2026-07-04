@@ -347,3 +347,25 @@ dengan entry/exit konkret. TAPI konsentrasi di AMD/MU/AVGO yang drive — sebagi
 cross-sectional ranking (masuk saat top-decile, keluar saat drop out), BUKAN barrier momentum per-nama.
 Basis ticker dashboard = RS top-decile (di antara universe termasuk nama attachment lu). Reproduce:
 `run_research.py --tickers cache_lu.parquet` di data lengkap lu (termasuk era PLTR/SNDK + nama intl).
+
+---
+
+## 13. KNOWLEDGE GRAPH — network terhubung (jawaban audit inti)
+
+Kritik lu paling tajam: engine masih berdiri sendiri. `knowledge_graph.py` = network terhubung:
+**61 node, 60 edge** (macro→sektor→supply-chain→company). Tiap edge: sign, lead, confidence, strength,
+half-life, regime, evidence, `tested`.
+
+**Propagasi multi-hop (2nd/3rd/4th order):**
+- War/Geopolitics↑ → Oil↑ (1°) → Tanker/Refinery/Shipyard (2°) → Freight/Crack/Insurance (3°) — confidence
+  meluruh tiap hop, lead-days nunjukin apa yang react duluan.
+- Dollar↑ → Gold↓/Oil↓/Stocks↓ (**✓TESTED** corr -0.22/-0.20/-0.16 p<0.001) → hilir.
+- AI/Compute↑ → HBM→DRAM→CoWoS→Substrate + Power→Transformer→Copper + Cooling + Optics.
+- Fed↑ → Dollar/Rates/Liquidity transmission.
+
+**Beta chains (picks & shovels):** AI → primary (NVDA/GEV/COHR, crowded) → 2nd-deriv (MU@HBM, ETN@Transformer,
+CEG@Utility) → 3rd-deriv (FCX@Copper) — hidden winners di hilir.
+
+**Jujur soal edge:** 6 edge cross-asset TERUJI di data real (p<0.001). 54 edge lain = STRUCTURAL KNOWLEDGE
+(hubungan ekonomi grounded) buat reasoning, ditandai `tested=False` — BUKAN klaim statistik. Ga ada yang
+dikarang jadi "terbukti." Node/edge baru masuk lewat hypothesis→validation (aturan Tier lu), `tested` = gerbangnya.
