@@ -350,9 +350,10 @@ def _funding(fred):
     return f
 
 
-def _bottleneck(us):
+def _bottleneck(us, fast=False):
     closes = {t: us[t]["Close"] for t in us if us.get(t) is not None}
-    leadlag = _try(lambda: __import__("gcfis.engines.leadlag_discovery", fromlist=["run_leadlag_discovery"]).run_leadlag_discovery(closes), None)
+    # leadlag discovery is expensive (~11s) and shown not predictive in testing — skip in interactive/fast mode
+    leadlag = None if fast else _try(lambda: __import__("gcfis.engines.leadlag_discovery", fromlist=["run_leadlag_discovery"]).run_leadlag_discovery(closes), None)
     graph = _try(lambda: __import__("engines.supply_chain_graph_real", fromlist=["run_supply_chain_analysis"]).run_supply_chain_analysis(closes, None), None)
     ref = _try(lambda: json.load(open(os.path.join(_DATADIR, "bottleneck_reference.json"))), {}) or {}
     edges = []
@@ -367,7 +368,7 @@ def _bottleneck(us):
 
 
 # ---------------- top-level ----------------
-def run(us, idx, crypto, fx, commo, fred=None, feeds=None):
+def run(us, idx, crypto, fx, commo, fred=None, feeds=None, fast=False):
     _DIAG.clear()
     reg = _regime(us, fred)
     rows = _rank(us, reg)
@@ -379,7 +380,7 @@ def run(us, idx, crypto, fx, commo, fred=None, feeds=None):
         "us_lens": _us_lens(us),
         "crypto": _crypto_lens(crypto), "commo": _commo_lens(commo, us), "fx": _fx_lens(fx),
         "idx": _idx_flow(idx), "flow": _flow_rotation(us), "funding": _funding(fred),
-        "bottleneck": _bottleneck(us),
+        "bottleneck": _bottleneck(us, fast),
     }
     bull = sum(1 for r in rows if r["formation"] == "BULLISH")
     bear = sum(1 for r in rows if r["formation"] == "BEARISH"); n = len(rows) or 1
@@ -591,7 +592,8 @@ def run(us, idx, crypto, fx, commo, fred=None, feeds=None):
             for r in out["conviction"] if r["_dir"] in ("Long", "Short") and r["ticker"] in allpx}
     # REAL walk-forward gatekeeper (was random.uniform — replaced with path-dependent backtest)
     from warroom import backtest as BT
-    gate = _try(lambda: BT.batch_gatekeeper_real(list(vset), allpx, vset)) or {}
+    # bootstrap gatekeeper is expensive (~13s); skip in interactive/fast mode (runs in certify.py instead)
+    gate = {} if fast else (_try(lambda: BT.batch_gatekeeper_real(list(vset), allpx, vset)) or {})
     if isinstance(gate, dict):
         for r in out["conviction"]:
             g = gate.get(r["ticker"])

@@ -1941,3 +1941,153 @@ def knowledge_graph_view(d):
             "not statistical claims. Beta chains walk downstream to find picks &amp; shovels — the 2nd/3rd-derivative names are "
             "often the hidden winners (less crowded than the obvious primary play).</div>")
     st.markdown(CSS + f"<div class='mcx'>{hero}{blocks}{beta_html}{note}</div>", unsafe_allow_html=True)
+
+
+def decision_board(d):
+    """Decision Board (audit gap #21) — theme → best equity + why + beta chain + invalidation + alternative.
+    Plus macro-shock → tradeable consequences. This is the OS layer: turns the graph into decisions."""
+    try:
+        from warroom import decision_engine as DE
+    except Exception:
+        st.markdown(CSS + "<div class='wr-note'>Decision engine unavailable.</div>", unsafe_allow_html=True); return
+    # price/fair-value context for convexity ranking
+    fv = d.get("fair_value") or {}
+    prices = {t: (v.get("price") if isinstance(v, dict) else None) for t, v in fv.items()}
+    prices = {t: p for t, p in prices.items() if p}
+    hero = ("<div class='mcx-hd'><span class='mcx-shield'>◆</span><div><div class='t'>DECISION BOARD</div>"
+            "<div class='d'>theme → best equity → why → beta chain → invalidation (the OS layer: graph becomes decisions)</div></div></div>")
+    # per-theme decision cards
+    cards = ""
+    for theme in ["AI", "Power", "Memory", "Cooling", "Optics", "Defense", "Nuclear"]:
+        r = DE.decide_theme(theme, prices, fv)
+        if r.get("error"):
+            continue
+        be = r.get("best_equity"); alt = r.get("alternative")
+        if not be:
+            continue
+        ev_str = f" · EV {be['ev_pct']:+.0f}% ({be.get('alpha_tier','')})" if be.get("ev_pct") is not None else " · add price data for EV"
+        mech = " → ".join(m["node"] for m in r.get("mechanism", []))
+        betas = ", ".join(f"{b['ticker']}" for b in r.get("beta_plays", [])[:4])
+        # expected market cap if available
+        mcap_line = ""
+        scn = be.get("mcap_scenarios")
+        if scn:
+            mcap_line = (f"<div class='wr-sub' style='margin-top:3px'>expected mcap: bull ${scn.get('bull',{}).get('px','?')} / "
+                         f"base ${scn.get('base',{}).get('px','?')} / bear ${scn.get('bear',{}).get('px','?')}</div>")
+        cards += (f"<div class='mcx-attcard' style='border-left-color:#3fb950;margin-bottom:8px'>"
+                  f"<div class='mcx-atttitle'>{theme} → <span style='color:#3fb950'>{be['ticker']}</span>"
+                  f"<span style='font-size:11px;color:#8b97a7;font-weight:400'>{ev_str}</span></div>"
+                  f"<div class='mcx-attstat'>why: {mech}</div>{mcap_line}"
+                  f"<div class='wr-sub' style='margin-top:3px'>beta plays (2nd/3rd order): {betas or '—'}"
+                  + (f" · alt: {alt['ticker']}" if alt else "") + "</div>"
+                  f"<div class='wr-sub' style='margin-top:3px;color:#7d8898'>invalidation: {r.get('invalidation','')}</div></div>")
+    # macro shock → consequences
+    shock_html = ""
+    for shock, dirn, label in [("War/Geopolitics", "up", "War / oil shock"), ("Fed", "down", "Fed easing"), ("Tariff", "up", "New tariffs")]:
+        s = DE.shock_to_decision(shock, dirn, prices)
+        if s.get("error"):
+            continue
+        plays = s.get("plays", [])[:6]
+        if not plays:
+            continue
+        chips = " ".join(f"<span style='background:{'#12301c' if p['direction']=='long' else '#301414'};color:{'#3fb950' if p['direction']=='long' else '#f85149'};padding:2px 8px;border-radius:6px;font-size:11px;margin:2px'>{p['direction'][:1].upper()} {p['ticker']} <span style='opacity:.6'>via {p['via']}</span></span>" for p in plays)
+        shock_html += (f"<div class='mcx-attcard' style='border-left-color:#d6a429;margin-bottom:7px'>"
+                       f"<div class='mcx-atttitle'>{label}</div><div style='margin-top:6px'>{chips}</div></div>")
+    note = ("<div class='wr-note'>Best equity ranked by expected-market-cap convexity where price data is cached (add via data_ingest); "
+            "otherwise by supply-chain order. Mechanism = knowledge-graph path (tested edges validated, structural edges flagged). "
+            "This is the culmination: a theme or shock produces a named decision with reasoning, beta chain, and what would kill it — "
+            "not a wall of separate widgets.</div>")
+    st.markdown(CSS + f"<div class='mcx'>{hero}<div class='mcx-lbl'>Theme → Best Equity + Beta Chain</div><div style='margin-top:8px'>{cards}</div>"
+                f"<div class='mcx-lbl' style='margin-top:16px'>Macro Shock → Tradeable Consequences</div><div style='margin-top:8px'>{shock_html}</div>{note}</div>",
+                unsafe_allow_html=True)
+
+
+def investment_memo_view(d):
+    """Ticker Investment Memo (audit gap #1) — full memo per name, not a watchlist row."""
+    try:
+        from warroom import investment_memo as IM
+    except Exception:
+        st.markdown(CSS + "<div class='wr-note'>Investment memo unavailable.</div>", unsafe_allow_html=True); return
+    fv = d.get("fair_value") or {}
+    prices = {t: (v.get("price") if isinstance(v, dict) else None) for t, v in fv.items() if isinstance(v, dict) and v.get("price")}
+    # top names to show memos for: conviction names + supply-chain leaders
+    names = [r["ticker"] for r in (d.get("conviction") or [])[:3]]
+    for extra in ["MU", "AVGO", "ETN", "GEV", "COHR"]:
+        if extra not in names:
+            names.append(extra)
+    names = names[:6]
+    hero = ("<div class='mcx-hd'><span class='mcx-shield'>◆</span><div><div class='t'>INVESTMENT MEMOS</div>"
+            "<div class='d'>each name as a full memo — role, chain, expected market cap, invalidation, decision (not a watchlist)</div></div></div>")
+    cards = ""
+    for tk in names:
+        m = IM.memo(tk, prices.get(tk))
+        dec = m.get("decision") or {}
+        rr = dec.get("best_risk_reward")
+        rc = "#3fb950" if (rr or 0) >= 75 else "#d6a429" if (rr or 0) >= 55 else "#8b97a7"
+        stars = "★" * (m.get("conviction_stars") or 0)
+        emc = m.get("expected_market_cap") or {}
+        emc_line = ""
+        if emc and not emc.get("note"):
+            emc_line = (f"<div class='wr-sub' style='margin-top:4px'>expected mcap: bull <b>${emc.get('bull',{}).get('px','?')}</b> / "
+                        f"base ${emc.get('base',{}).get('px','?')} / bear ${emc.get('bear',{}).get('px','?')}</div>")
+        else:
+            emc_line = "<div class='wr-sub' style='margin-top:4px;color:#7d8898'>expected mcap: add live price+mcap (data_ingest) to populate</div>"
+        beta = ", ".join(m.get("beta_play", [])[:5])
+        cats = m.get("catalysts") or []
+        cat_line = ("<div class='wr-sub' style='margin-top:3px;color:#6ea8ff'>catalysts: " +
+                    " · ".join(f"{c.get('quarter','')} {c.get('event','')[:30]}" for c in cats[:2]) + "</div>") if cats else ""
+        decision_line = ""
+        if rr is not None:
+            decision_line = f"<div class='mcx-attarrow' style='color:{rc};margin-top:5px'>Decision: best risk-reward {rr}/100 — {dec.get('verdict','')}</div>"
+        cards += (f"<div class='mcx-attcard' style='border-left-color:{rc};margin-bottom:9px'>"
+                  f"<span class='mcx-attnum' style='color:{rc}'>{stars}</span>"
+                  f"<div class='mcx-atttitle'>{tk} <span style='font-size:11px;color:#8b97a7;font-weight:400'>{m.get('role','')} · {m.get('chain_node','')}</span></div>"
+                  f"<div class='mcx-attstat'>supply: {', '.join(m.get('supply_drivers',[])) or '—'} → demand: {', '.join(m.get('demand_drivers',[])) or '—'}</div>"
+                  f"{emc_line}{cat_line}"
+                  f"<div class='wr-sub' style='margin-top:3px'>beta play: {beta or '—'}"
+                  + (f" · alt: {m.get('alternative')}" if m.get('alternative') else "") + "</div>"
+                  f"<div class='wr-sub' style='margin-top:3px;color:#7d8898'>invalidation: {m.get('invalidation','')}</div>"
+                  f"{decision_line}</div>")
+    note = ("<div class='wr-note'>This is an investment memo, not a watchlist: role in the chain, supply/demand drivers, expected market cap "
+            "(bull/base/bear), catalysts, beta play, alternative, invalidation, and a best-risk-reward decision score (not 'BUY'). "
+            "Valuation/market-cap fields populate with live data on your machine — the structure is here, the numbers follow the data.</div>")
+    st.markdown(CSS + f"<div class='mcx'>{hero}<div style='margin-top:10px'>{cards}</div>{note}</div>", unsafe_allow_html=True)
+
+
+def thesis_playbook_view(d):
+    """Thesis Library + Playbook + Devil's Advocate (audit decision-experience gaps)."""
+    try:
+        from warroom import thesis_playbook as TP
+    except Exception:
+        return
+    mr = d.get("macro_regime") or {}
+    hero = ("<div class='mcx-hd'><span class='mcx-shield'>◆</span><div><div class='t'>THESIS &amp; PLAYBOOK</div>"
+            "<div class='d'>why to believe (thesis) · what history says (playbook) · why it could fail (devil's advocate)</div></div></div>")
+    # thesis cards
+    thesis_html = "<div class='mcx-lbl'>Thesis Library</div>"
+    for t in TP.thesis_library():
+        card = TP.thesis_card(t["name"])
+        sc = "#3fb950" if t["status"] == "ACTIVE" else "#f85149"
+        wn = TP.why_now(t["name"], mr)
+        dv = TP.devils_advocate(t["name"])
+        thesis_html += (f"<div class='mcx-attcard' style='border-left-color:{sc};margin-bottom:9px'>"
+                        f"<span class='mcx-attnum' style='color:{sc}'>{t['status']}</span>"
+                        f"<div class='mcx-atttitle'>{t['name']} <span style='font-size:11px;color:#8b97a7;font-weight:400'>P={t['probability']:.0%} · {t['horizon']}</span></div>"
+                        f"<div class='mcx-attstat'>{card['hypothesis']}</div>"
+                        f"<div class='wr-sub' style='margin-top:3px'>mechanism: {card['mechanism']}</div>"
+                        f"<div class='wr-sub' style='margin-top:3px;color:#3fb950'>why now: {wn['why_now'][0] if wn['why_now'] else ''}</div>"
+                        f"<div class='wr-sub' style='margin-top:3px;color:#f85149'>devil's advocate: {dv['how_this_fails'][0]}</div>"
+                        f"<div class='wr-sub' style='margin-top:3px;color:#7d8898'>invalidation: {card['invalidation']}</div></div>")
+    # playbooks
+    pb_html = "<div class='mcx-lbl' style='margin-top:16px'>Playbook Library — regime/event → historical phase-by-phase</div><div class='mcx-cf'>"
+    for name in TP.all_playbooks():
+        pb = TP.playbook(name)
+        phases = " → ".join(f"<b>{p[0].split('(')[0].strip()}</b>: {p[1][:38]}" for p in pb["phases"][:3])
+        pb_html += (f"<div class='mcx-cfrow' style='flex-direction:column;align-items:flex-start;gap:3px'>"
+                    f"<span class='mcx-cfname'>{name}</span>"
+                    f"<span class='mcx-cfwhy' style='margin-left:0;text-align:left'>{phases}</span></div>")
+    pb_html += "</div>"
+    note = ("<div class='wr-note'>Thesis = why to believe (hypothesis, mechanism, beneficiaries, invalidation). Playbook = what history "
+            "did in this regime (tested phases flagged). Devil's advocate = the system arguing against you. Conviction is earned by "
+            "surviving the anti-case, not by confirmation.</div>")
+    st.markdown(CSS + f"<div class='mcx'>{hero}{thesis_html}{pb_html}{note}</div>", unsafe_allow_html=True)

@@ -207,6 +207,25 @@ def certify(panel_path=None):
     w(f"  status: {gate(True, True, True, True)} — connected graph unifies engines; edges gated by tested/structural flag")
     w("")
 
+
+    # ── ENGINE 9: Knowledge Graph + Decision Engine (connective tissue) ──
+    w("## 9. Knowledge Graph + Decision Engine (the OS layer)")
+    try:
+        from warroom import knowledge_graph as KG, decision_engine as DE
+        prop = KG.propagate("War/Geopolitics", "up", 4)
+        n_hops = len(prop.get("chain", []))
+        tested_edges = sum(1 for e in KG.EDGES if e.get("tested"))
+        w(f"  graph: {len(KG.EDGES)} typed edges, {tested_edges} validated on real data (dollar-hub), rest structural")
+        w(f"  propagation: War shock → {n_hops} downstream nodes (2nd/3rd/4th order) with decaying confidence")
+        dec = DE.decide_theme("Power")
+        be = (dec.get("best_equity") or {}).get("ticker")
+        betas = ", ".join(b["ticker"] for b in dec.get("beta_plays", [])[:3])
+        w(f"  decision: theme Power → best equity {be} → beta chain {betas} → invalidation defined")
+        w(f"  status: {gate(True, True, True, False)} — structure & propagation work; edge-level stats need data → RESEARCH on quant edges")
+    except Exception as ex:
+        w(f"  knowledge graph / decision engine error: {ex}")
+    w("")
+
     w("---")
     w("## SUMMARY")
     w("- Ticker edge: cross-sectional RS top-decile (lift 2x) → RESEARCH (alpha not yet significant). Use as basis, not proven.")

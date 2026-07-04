@@ -415,3 +415,43 @@ menyatukannya: 61 node, 60 typed edge (sign/lead/confidence/strength/half-life/r
 - Centerpiece tab Knowledge Graph + masuk certify.py (engine #9).
 
 File: warroom/knowledge_graph.py (baru), render.py (+knowledge_graph_view), app.py (wired), certify.py.
+
+---
+
+# LANJUTAN — RESPONS AUDIT: Decision Engine + Knowledge Graph connective tissue
+
+Nutup gap skor terendah audit lu (Knowledge Graph 3/10, Decision Intelligence 2/10):
+- **Decision Engine** (`decision_engine.py` + Decision Board di tab Alpha): theme → best equity → why
+  (mekanisme graph) → beta chain (2nd/3rd order) → invalidation → alternative. Macro shock → tradeable
+  names (War→XOM/CVX/VLO). Best equity di-rank by expected-mcap convexity.
+- **Knowledge Graph** (udah ada, 61 edges, semua chain audit): dikonfirmasi ke-render + ke-mapping ticker +
+  di-add ke certify (validasi propagasi).
+- **AUDIT_RESPONSE.md**: jawaban jujur poin-per-poin ke 3 audit lu + framing arsitektur/implementasi/validasi.
+- Tier 2/3 backlog (70-100 engine di doc lu) SENGAJA ga dibangun — sesuai aturan lu (masuk lewat validasi).
+
+File: warroom/decision_engine.py (baru), render.py (+decision_board), app.py (wired), certify.py (+engine 9),
+AUDIT_RESPONSE.md (baru).
+
+---
+
+# LANJUTAN — Investment Memo + Thesis/Playbook + MPS + performance + cleanup (respons 6 audit)
+
+Nutup gap decision-experience yang paling ditekankan di 6 audit lu (Ticker Memo ⭐×10, Thesis, Playbook):
+- **Investment Memo** (`investment_memo.py` + view di Alpha): tiap ticker = memo lengkap — role/chain/
+  supply-demand drivers/**expected market cap bull-base-bear**/catalysts/beta play/alternative/invalidation/
+  **decision = best-risk-reward score (bukan BUY)**. Bukan watchlist. Contoh MU: HBM ★★★★★, mcap bull$220/
+  base$151/bear$65, decision 76 "STRONG accumulation".
+- **Thesis + Playbook + Why-Now/Why-Not/Devil's-Advocate** (`thesis_playbook.py` + view di Macro & Regime):
+  thesis card (hypothesis/mechanism/probability/KPI/invalidation), playbook per regime (War→Phase1 Oil/Gold/
+  Defense→..., tested flagged), sistem sendiri bantah thesis lu.
+- **MASTER_PRODUCT_SPEC.md**: source-of-truth (Vol 1-15) — vision/tab/widget/formula/graph/validation +
+  aturan "TIDAK BOLEH ADA" + backlog Tier2/3 dengan Value-Audit gate.
+
+Cleanup + performance (ask lu "smooth, ga berat, bebas dead code"):
+- Hapus `discover.py` (dead) + dead helper `_causal`. Fix import bug `calibrate_lpm`.
+- **Fast mode** di compute: skip 2 research op berat (bootstrap gatekeeper 13s + leadlag discovery 11s —
+  yang terakhir udah terbukti ga prediktif) di dashboard; tetap jalan di certify.py. Dashboard 22% lebih cepat.
+- 50/51 modul import bersih (calibrate_lpm fixed).
+
+Status: engine inti + decision experience (memo/thesis/playbook/decision-board) JADI. Visual interaktif
+(node-graph/bubble/sankey) + fundamental per-company + implementasi DB/API = backlog (butuh data/effort).

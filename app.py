@@ -24,7 +24,7 @@ def main():
         commo, _ = D.load(D.COMMO_UNIVERSE)
         feeds = FEEDS.load_feeds()                     # live-feed snapshot (build_feeds.py); empty = proxy
         fred = feeds.get("fred") or F.fetch()
-        d = C.run(us, idx, cp, fxp, commo, fred, feeds)
+        d = C.run(us, idx, cp, fxp, commo, fred, feeds, fast=True)
         # forward-test logger: log today's conviction point-in-time, then resolve open signals on later bars
         allpx = {**commo, **fxp, **cp, **idx, **us}
         try:
@@ -48,11 +48,14 @@ def main():
         R.mission_control(d)
     with tabs[1]:                       # MACRO cluster: cross-asset playbook + regime state + decision engine
         R.cross_asset_macro(d)
+        R.thesis_playbook_view(d)
         R.market_state(d)
         R.command_center(d, source)
     with tabs[2]:                       # RISK timing: panic/fear-greed/crash-lead/valuation
         R.early_warning_tab(d)
-    with tabs[3]:                       # ALPHA: where the tickers come out — ranking + decision market + US names + fair value
+    with tabs[3]:                       # ALPHA: decision board + ranking + US names + fair value
+        R.decision_board(d)
+        R.investment_memo_view(d)
         R.alpha(d)
         R.us_stocks(d)
         R.fair_value_cards(d)
