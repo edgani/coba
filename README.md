@@ -3,24 +3,29 @@
 Dibangun ulang dari 0: **6 file kode** (bukan 49), cuma engine yang **TERUJI**, jalan cepat, tiap angka
 traceable ke test. Ganti versi lama yang bloated.
 
-## Struktur (lean)
+## Struktur (FLAT — deploy-ready untuk Streamlit Cloud, app.py di root repo)
 ```
-wr/
-  data.py       # universe + loading (cache real → yfinance → sintetis fallback)
-  backtest.py   # walk-forward + bootstrap + RS top-decile signal + surge-lift
-  engines.py    # SEMUA engine teruji: risk regime, cross-asset, fear-greed/panic, crash-lead, valuation, ticker ranking
-  graph.py      # knowledge graph + propagasi + decision engine + investment memo + thesis + playbook
-  app.py        # dashboard 6 tab (Streamlit)
-  certify.py    # master validation → CERTIFICATION.md
-  research/     # data real (S&P panel, Shiller, VIX, macro panel) + RESEARCH_FINDINGS.md
-  data/         # bottleneck_reference.json (nama supply-chain kurasi)
+app.py        # dashboard 6 tab (Streamlit) — MAIN FILE
+data.py       # universe + loading (cache real → yfinance → sintetis fallback)
+backtest.py   # walk-forward + bootstrap + RS top-decile signal + surge-lift
+engines.py    # SEMUA engine teruji: risk regime, cross-asset, fear-greed/panic, crash-lead, valuation, ranking
+graph.py      # knowledge graph + propagasi + decision engine + investment memo + thesis + playbook
+certify.py    # master validation → CERTIFICATION.md
+research/     # data real (S&P panel, Shiller, VIX, macro panel) + RESEARCH_FINDINGS.md
+data/         # bottleneck_reference.json (nama supply-chain kurasi)
+requirements.txt
 ```
+
+## Deploy ke Streamlit Cloud
+1. Push semua file ini ke root repo GitHub lu (app.py di root, BUKAN dalam subfolder).
+2. Streamlit Cloud → New app → main file = `app.py`.
+3. Selesai. (Struktur flat = import antar-file langsung, ga ada masalah package path.)
 
 ## Jalanin
 ```bash
 pip install -r requirements.txt
-streamlit run wr/app.py          # dashboard
-python -m wr.certify             # validasi semua engine → CERTIFICATION.md
+streamlit run app.py          # dashboard
+python certify.py             # validasi semua engine → CERTIFICATION.md
 ```
 Di mesin lu, data real (cache/yfinance) otomatis kepake — semua angka jadi real. Tambah ticker:
 `from wr import data; data.add_ticker("005930.KS")` (Samsung), dst.

@@ -5,9 +5,9 @@ Sinyal actionable = yang lolos certify (RS top-decile, panic-bottom, cross-asset
 """
 from __future__ import annotations
 import os, sys
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import streamlit as st
-from wr import data as D, engines as E, graph as G
+import data as D, engines as E, graph as G
 
 st.set_page_config(page_title="War Room Pro", layout="wide", initial_sidebar_state="collapsed")
 
@@ -209,7 +209,7 @@ with tabs[4]:
 
 # ───────────────────────── VALIDATION ─────────────────────────
 with tabs[5]:
-    _hd("VALIDATION", "every signal by test status — run python -m wr.certify for the full report")
+    _hd("VALIDATION", "every signal by test status — run python certify.py for the full report")
     signals = [
         ("Cross-asset macro (dollar hub)", "PRODUCTION", "grn", "corr −0.22, p<0.001"),
         ("Risk regime (aggressive/defensive)", "PRODUCTION", "grn", "corr(fwd DD) +0.25, p<0.001"),

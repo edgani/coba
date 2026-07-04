@@ -170,7 +170,7 @@ def valuation_room():
 # ══════════════════════════ TICKER SIGNALS (RS top-decile — the tested edge) ══════════════════════════
 def ticker_ranking(us_prices):
     """Rank US names by tested RS top-decile signal. Returns names currently in the top decile (the edge)."""
-    from wr import backtest as BT
+    import backtest as BT
     close = pd.DataFrame({t: d["Close"] for t, d in us_prices.items() if d is not None and len(d) > 150})
     if close.shape[1] < 10:
         return []

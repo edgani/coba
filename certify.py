@@ -1,4 +1,4 @@
-"""wr/certify.py — master validation. Run: python -m wr.certify
+"""wr/certify.py — master validation. Run: python certify.py
 
 Jalanin semua test di data real (research/), hasilkan status PRODUCTION/RESEARCH/REJECTED per engine.
 Lu ga perlu jalanin test manual — statusnya jelas. Ga ada yang PRODUCTION tanpa lolos gate.
@@ -8,7 +8,7 @@ import os, sys
 import numpy as np
 import pandas as pd
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 _RES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "research")
 OUT = []
 def w(s=""):
@@ -20,7 +20,7 @@ def gate(mech, stat, value, oos):
 
 
 def certify():
-    from wr import backtest as BT
+    import backtest as BT
     from scipy import stats
     w("# CERTIFICATION REPORT — every signal by test status\n")
 
@@ -75,7 +75,7 @@ def certify():
         w(f"  panic→fwd63 {pf.mean()*100:+.1f}% vs base {allf.mean()*100:+.1f}% (p={p:.4f}) → {gate(True, p < 0.05 and pf.mean() > allf.mean(), True, True)}\n")
 
     # 6. Knowledge graph + decision
-    from wr import graph as G
+    import graph as G
     prop = G.propagate("War/Geopolitics", "up", 4)
     dec = G.decide_theme("Power")
     w("## 6. Knowledge graph + decision engine")
@@ -88,7 +88,7 @@ def certify():
     w("RESEARCH: RS top-decile (alpha not significant), knowledge-graph edges, euphoria.")
     w("REJECTED: naive formation+RS (no edge). Nothing reaches PRODUCTION without passing all 4 gates.")
 
-    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "CERTIFICATION.md"), "w") as f:
+    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "CERTIFICATION.md"), "w") as f:
         f.write("\n".join(OUT))
 
 
