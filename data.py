@@ -47,21 +47,54 @@ def _load_one(ticker, start="2015-01-01"):
     p = os.path.join(CACHE, f"{ticker.replace('/', '_')}.parquet")
     if os.path.exists(p):
         try:
-            return pd.read_parquet(p), "cache"
+            df = _normalize_ohlcv(pd.read_parquet(p))
+            if df is not None and len(df) > 60:
+                return df, "cache"
         except Exception:
             pass
     # live sources (work on your machine; blocked in sandbox)
     try:
         import yfinance as yf
         df = yf.download(ticker, start=start, progress=False, auto_adjust=False)
+        df = _normalize_ohlcv(df)
         if df is not None and len(df) > 100:
-            df = df.rename(columns=str.title)[["Open", "High", "Low", "Close", "Volume"]]
             os.makedirs(CACHE, exist_ok=True)
             df.to_parquet(p)
             return df, "yfinance"
     except Exception:
         pass
     return _synth(ticker), "synthetic"
+
+
+def _normalize_ohlcv(df):
+    """Normalize any yfinance/CSV frame to clean single-level OHLCV columns (Series each). Robust to MultiIndex."""
+    if df is None or len(df) == 0:
+        return None
+    import pandas as pd
+    # flatten MultiIndex columns (modern yfinance returns [('Open','TICK'),...])
+    if isinstance(df.columns, pd.MultiIndex):
+        # take the price-field level (level 0), drop ticker level
+        df = df.copy()
+        df.columns = [c[0] if isinstance(c, tuple) else c for c in df.columns]
+    # title-case + dedupe
+    df = df.rename(columns=lambda c: str(c).title())
+    df = df.loc[:, ~df.columns.duplicated()]
+    need = ["Open", "High", "Low", "Close", "Volume"]
+    have = [c for c in need if c in df.columns]
+    if "Close" not in have:
+        return None
+    df = df[have].copy()
+    # ensure numeric Series (not DataFrame) per column
+    for c in have:
+        col = df[c]
+        if getattr(col, "ndim", 1) > 1:
+            df[c] = col.iloc[:, 0]
+    df = df.apply(pd.to_numeric, errors="coerce").dropna(subset=["Close"])
+    # fill any missing OHLCV columns from Close so downstream never KeyErrors
+    for c in need:
+        if c not in df.columns:
+            df[c] = df["Close"] if c != "Volume" else 0.0
+    return df[need]
 
 
 def load(tickers, start="2015-01-01"):

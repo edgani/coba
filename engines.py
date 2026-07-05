@@ -19,6 +19,24 @@ import pandas as pd
 _DIR = os.path.dirname(os.path.abspath(__file__))
 _RES = os.path.join(_DIR, "research")
 
+def _close_panel(us_prices, min_len=60):
+    """Build a clean [dates × tickers] close panel from a dict of OHLCV frames. Robust to
+    scalars/DataFrames/empty — always returns a DataFrame of Series (possibly empty)."""
+    series = {}
+    for t, d in (us_prices or {}).items():
+        if d is None or len(d) <= min_len or "Close" not in getattr(d, "columns", []):
+            continue
+        c = d["Close"]
+        if getattr(c, "ndim", 1) > 1:
+            c = c.iloc[:, 0]
+        c = pd.to_numeric(c, errors="coerce").dropna()
+        if len(c) > min_len:
+            series[t] = c
+    if not series:
+        return pd.DataFrame()
+    return pd.DataFrame(series)
+
+
 # tested cross-asset links (1971-2023)
 CROSS_ASSET_LINKS = {
     ("dollar", "gold"): {"corr": -0.22, "p": 0.0000, "play": "dollar up → short gold; down → long gold"},
@@ -171,7 +189,7 @@ def valuation_room():
 def ticker_ranking(us_prices):
     """Rank US names by tested RS top-decile signal. Returns names currently in the top decile (the edge)."""
     import backtest as BT
-    close = pd.DataFrame({t: d["Close"] for t, d in us_prices.items() if d is not None and len(d) > 150})
+    close = _close_panel(us_prices, 150)
     if close.shape[1] < 10:
         return []
     sig = BT.rs_top_decile_signal(close, 126, 0.90)
@@ -187,7 +205,9 @@ def run_all(us_prices, close_panel=None):
     """Compute all tested engines. Returns the dashboard state dict."""
     panel = _macro_panel(); vix = _vix()
     if close_panel is None and us_prices:
-        close_panel = pd.DataFrame({t: d["Close"] for t, d in us_prices.items() if d is not None and len(d) > 60})
+        close_panel = _close_panel(us_prices, 60)
+    if close_panel is not None and close_panel.empty:
+        close_panel = None
     return {
         "risk_regime": risk_regime(panel),
         "macro_quad": macro_quad(panel),

@@ -40,7 +40,17 @@ COL = {"grn": "#3fb950", "amb": "#d6a429", "red": "#f85149", "inf": "#6ea8ff", "
 def _load():
     us, meta = D.load(D.US_UNIVERSE)
     state = E.run_all(us)
-    fv = {t: {"price": float(d["Close"].iloc[-1])} for t, d in us.items() if d is not None and len(d)}
+    fv = {}
+    for t, d in us.items():
+        if d is None or len(d) == 0 or "Close" not in getattr(d, "columns", []):
+            continue
+        try:
+            c = d["Close"]
+            if getattr(c, "ndim", 1) > 1:
+                c = c.iloc[:, 0]
+            fv[t] = {"price": float(c.iloc[-1])}
+        except Exception:
+            continue
     return state, fv, D.data_is_synthetic(meta)
 
 
