@@ -8,7 +8,8 @@ traceable ke test. Ganti versi lama yang bloated.
 app.py        # dashboard 8 tab (Streamlit) — MAIN FILE
 data.py       # universe + loading (cache real → yfinance → sintetis fallback)
 backtest.py   # walk-forward + bootstrap + RS top-decile signal + surge-lift
-engines.py    # SEMUA engine teruji: risk regime, cross-asset, fear-greed/panic, crash-lead, valuation, ranking
+engines.py    # engine teruji: risk regime, cross-asset, fear-greed/panic, crash-lead, valuation, ranking
+internals.py  # V40-ported: breadth, market-mode, change-detection (dari close panel, no paid data)
 graph.py      # knowledge graph + propagasi + decision engine + investment memo + thesis + playbook
 certify.py    # master validation → CERTIFICATION.md
 research/     # data real (S&P panel, Shiller, VIX, macro panel) + RESEARCH_FINDINGS.md
@@ -44,6 +45,7 @@ Di mesin lu, data real (cache/yfinance) otomatis kepake — semua angka jadi rea
 ## Apa yang DILIHAT vs yang di BACKGROUND (sesuai permintaan lu)
 **Ditampilkan (yang lu butuh buat tau arah):**
 - Mission Control — regime, fear-greed, crash risk, valuation, top RS names
+- **Market Internals** (BARU, dari V40) — breadth (adv/dec, % above MA, konsentrasi top-5), market mode (pinning/expansion/squeeze/distribution), change detection (correlation shift + vol break = regime early-warning)
 - Macro & Regime — cross-asset playbook, dollar hub, thesis library, playbook
 - Early Warning — panic-bottom, crash lead-time, valuation room
 - Decision — theme→best equity→beta chain→invalidation, shock→names, investment memos

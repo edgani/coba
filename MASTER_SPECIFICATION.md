@@ -39,14 +39,14 @@ bilang "jangan dibuang". Masuk Production hanya setelah divalidasi di data lu.
 | **Positioning** ⭐ | dealer/CTA/gamma/vol-control exposure | engines/positioning.py, dealer.py | needs options data (paid); backtest gamma-flip |
 | **Flow** ⭐ | ETF/foreign/institution/retail flow, rotation | engines/flow.py, flow_type.py, flow_regime.py | flow→return predictive test |
 | **Fragility** ⭐ | market/liquidity/leverage/funding fragility, crowding | engines/fragility.py | fragility→drawdown event study |
-| **Change Detection** ⭐ | hidden regime shift, correlation/structure break | engines/change_detection.py, core/change_core.py | break→forward vol/return test |
+| **Change Detection** ⭐ | correlation shift + vol break | ✅ PORTED to lean/internals.py | now in Market Internals tab |
 | **Reflexivity** | price↑→flows↑→price↑ feedback loops | engines/reflexivity.py | reflexive-momentum vs mean-reversion regime test |
 | **Accumulation** | institutional accumulation/distribution, dark pool | engines/accumulation.py, broker_flow.py | accumulation→forward return test |
-| **Internals/Breadth** | advance-decline, participation, leadership | engines/internals.py | breadth-thrust→forward return (known edge, revalidate) |
+| **Internals/Breadth** | advance-decline, participation, leadership | ✅ PORTED to lean/internals.py | now in Market Internals tab (RESEARCH status) |
 | **Rotation** | country/sector/factor/theme rotation | engines/rotation.py | rotation-momentum predictive test (prior: weak) |
 | **Response Zone** | macro support/resistance/liquidity/demand zones | engines/response_zone.py | zone-reaction hit-rate test |
 | **Narrative** | AI/power/defense narrative momentum + fatigue | engines/narrative.py | narrative→sector return lead test |
-| **Market Mode** | risk-on/off/melt-up/crisis/bubble/transition | engines/market_mode.py | mode→forward return/vol test |
+| **Market Mode** | pinning/expansion/squeeze/distribution | ✅ PORTED to lean/internals.py | now in Market Internals tab |
 | **Shock** | oil+40%/dollar+15%/war/credit-event simulation | engines/shock.py | historical shock-response calibration |
 | **Lead-Lag Discovery** | auto-find leading indicators (copper→AI, etc) | engines/leadlag_discovery.py | **TESTED: daily lead-lag NOT predictive (p>0.5)** → keep as exploration only |
 | **Regime HMM** | hidden-markov regime states | engines/regime_hmm.py | regime-persistence + forward-return test |

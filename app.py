@@ -7,7 +7,7 @@ from __future__ import annotations
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import streamlit as st
-import data as D, engines as E, graph as G
+import data as D, engines as E, graph as G, internals as I
 
 st.set_page_config(page_title="War Room Pro", layout="wide", initial_sidebar_state="collapsed")
 
@@ -40,6 +40,7 @@ COL = {"grn": "#3fb950", "amb": "#d6a429", "red": "#f85149", "inf": "#6ea8ff", "
 def _load():
     us, meta = D.load(D.US_UNIVERSE)
     state = E.run_all(us)
+    state['internals'] = I.run_internals(us)
     fv = {}
     for t, d in us.items():
         if d is None or len(d) == 0 or "Close" not in getattr(d, "columns", []):
@@ -71,7 +72,7 @@ prices = {t: v["price"] for t, v in fv.items()}
 if synthetic:
     st.warning("⚠ Running on SYNTHETIC data (sandbox). On your machine with cached/yfinance data, all numbers become real. Structure & tested logic are identical.", icon="⚠️")
 
-tabs = st.tabs(["Mission Control", "Macro & Regime", "Early Warning", "Decision", "Supply Chain", "Companies", "Knowledge Graph", "Validation"])
+tabs = st.tabs(["Mission Control", "Macro & Regime", "Early Warning", "Market Internals", "Decision", "Supply Chain", "Companies", "Knowledge Graph", "Validation"])
 
 # ───────────────────────── MISSION CONTROL ─────────────────────────
 with tabs[0]:
@@ -160,8 +161,29 @@ with tabs[2]:
                     f"<div class='a' style='color:#6ea8ff;margin-top:6px;font-size:12px'>Median {vr['median_months_to_drawdown']} months to next −20% drawdown. {vr['interpretation']}</div></div>", unsafe_allow_html=True)
     st.markdown("<div class='wr-note'>Panic-bottom is the validated contrarian signal (fwd63 +6% vs +3%, p&lt;0.001). Euphoria-top is weaker (bull-market bias). Crash risk is a probability, not a timing call — high valuation does not mean sell.</div>", unsafe_allow_html=True)
 
-# ───────────────────────── DECISION ─────────────────────────
+# ───────────────────────── MARKET INTERNALS ─────────────────────────
 with tabs[3]:
+    _hd("MARKET INTERNALS", "breadth · market mode · change detection — is the move broad, and is structure shifting?")
+    intl = state.get("internals") or {}
+    b = intl.get("breadth"); mm = intl.get("market_mode"); cd = intl.get("change_detection")
+    cards = ""
+    if b:
+        cards += _card("Breadth", b["state"], f"{int(b['above_50ma_pct'])}% above 50MA · adv/dec {b['advancers']}/{b['decliners']}", f"new highs {b['new_highs']} / lows {b['new_lows']}", b["color"])
+    if mm:
+        cards += _card("Market Mode", mm["mode"], f"trend-z {mm['trend_z']}", mm["style"][:46], mm["color"])
+    if cd:
+        cards += _card("Change Detection", cd["state"], f"avg corr {cd['avg_correlation']} · vol {int(cd['vol_recent_annualized'])}%", cd["flags"][0][:46], cd["color"])
+    st.markdown(f"<div class='wr-grid'>{cards}</div>" if cards else "<div class='wr-note'>Internals need the US universe with 200+ bars — populates on real data.</div>", unsafe_allow_html=True)
+    if b:
+        concentration = f"Top-5 names carry {int(b['top5_momentum_share'])}% of the universe's gains. " + ("Narrow — late-cycle risk." if (b['top5_momentum_share'] or 0) > 60 else "Reasonably broad.") if b.get("top5_momentum_share") else ""
+        st.markdown(f"{CSS}<div class='wr-note'><b>Breadth:</b> {b['note']}. {concentration}</div>", unsafe_allow_html=True)
+    if cd and cd.get("flags") and "no structural" not in cd["flags"][0]:
+        flagrows = "".join(f"<div class='wr-row'><span class='wr-badge' style='color:#f85149;background:#f851491a'>SHIFT</span><span class='wr-name'>{fl}</span></div>" for fl in cd["flags"])
+        st.markdown(f"{CSS}<div class='wr-lbl'>Structural Shifts Detected</div><div class='wr-box'>{flagrows}</div>", unsafe_allow_html=True)
+    st.markdown("<div class='wr-note'>Ported from the V40 engine library (advisor's 'keep' list: breadth, market-mode, change-detection). Computed from the price panel — no paid data. Status RESEARCH until validated (rising correlation + vol break as a regime early-warning has literature support; not yet certified on this data). Dealer-gamma refinement omitted (needs options feed), not faked.</div>", unsafe_allow_html=True)
+
+# ───────────────────────── DECISION ─────────────────────────
+with tabs[4]:
     _hd("DECISION BOARD", "theme → best equity → beta chain → invalidation · shock → tradeable names")
     st.markdown("<div class='wr-lbl'>Theme → Best Equity + Beta Chain</div>", unsafe_allow_html=True)
     for theme in ["AI", "Power", "Memory", "Cooling", "Optics", "Defense"]:
@@ -202,7 +224,7 @@ with tabs[3]:
                     + f"<div style='font-size:11.5px;color:#7d8898;margin-top:3px'>invalidation: {m['invalidation']}</div></div></div>", unsafe_allow_html=True)
 
 # ───────────────────────── SUPPLY CHAIN ─────────────────────────
-with tabs[4]:
+with tabs[5]:
     _hd("SUPPLY CHAIN", "the multi-level chain — where the bottlenecks (and beta) are · from your research")
     st.markdown("<div class='wr-lbl'>Photonics / AI 12-Layer Supply Chain (bottleneck depth)</div>", unsafe_allow_html=True)
     rows = ""
@@ -239,7 +261,7 @@ with tabs[4]:
     st.markdown(f"{CSS}<div class='wr-box'>{oprows}</div><div class='wr-note'>Opportunity = gap between current price and scenario-based future value, weighted by probability. Not a target price — a range with asymmetry. Full DCF/revenue/margin decomposition needs fundamental data (your feed).</div>", unsafe_allow_html=True)
 
 # ───────────────────────── COMPANIES ─────────────────────────
-with tabs[5]:
+with tabs[6]:
     _hd("COMPANIES", "68 curated names by supply-chain layer · catalysts · institutional rotation")
     st.markdown("<div class='wr-lbl'>Companies by Layer (★ = consensus conviction across institutional accounts)</div>", unsafe_allow_html=True)
     for layer, names in G.companies_by_layer().items():
@@ -275,7 +297,7 @@ with tabs[5]:
         st.markdown(f"{CSS}<div class='wr-box'>{rfrows}</div>", unsafe_allow_html=True)
 
 # ───────────────────────── KNOWLEDGE GRAPH ─────────────────────────
-with tabs[6]:
+with tabs[7]:
     _hd("KNOWLEDGE GRAPH", "the connected network — shock propagates through typed edges to names")
     shock = st.selectbox("Shock at:", sorted(set(e["from"] for e in G.EDGES)), index=0)
     direction = st.radio("Direction:", ["up", "down"], horizontal=True)
@@ -291,7 +313,7 @@ with tabs[6]:
     st.markdown(f"<div class='wr-note'>{prop['note']}. Tested edges (green) are validated on real data (dollar hub, p&lt;0.001); structural edges (grey) are grounded economic relationships for reasoning — the graph shows what connects to what, honestly labelled.</div>", unsafe_allow_html=True)
 
 # ───────────────────────── VALIDATION ─────────────────────────
-with tabs[7]:
+with tabs[8]:
     _hd("VALIDATION", "every signal by test status — run python certify.py for the full report")
     signals = [
         ("Cross-asset macro (dollar hub)", "PRODUCTION", "grn", "corr −0.22, p<0.001"),
