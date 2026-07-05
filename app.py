@@ -71,7 +71,7 @@ prices = {t: v["price"] for t, v in fv.items()}
 if synthetic:
     st.warning("⚠ Running on SYNTHETIC data (sandbox). On your machine with cached/yfinance data, all numbers become real. Structure & tested logic are identical.", icon="⚠️")
 
-tabs = st.tabs(["Mission Control", "Macro & Regime", "Early Warning", "Decision", "Knowledge Graph", "Validation"])
+tabs = st.tabs(["Mission Control", "Macro & Regime", "Early Warning", "Decision", "Supply Chain", "Companies", "Knowledge Graph", "Validation"])
 
 # ───────────────────────── MISSION CONTROL ─────────────────────────
 with tabs[0]:
@@ -201,8 +201,81 @@ with tabs[3]:
                     + (f"<div style='font-size:11.5px;color:#3fb950;margin-top:3px'>decision: best risk-reward {dec.get('best_risk_reward')}/100 — {dec.get('verdict','')}</div>" if dec else "")
                     + f"<div style='font-size:11.5px;color:#7d8898;margin-top:3px'>invalidation: {m['invalidation']}</div></div></div>", unsafe_allow_html=True)
 
-# ───────────────────────── KNOWLEDGE GRAPH ─────────────────────────
+# ───────────────────────── SUPPLY CHAIN ─────────────────────────
 with tabs[4]:
+    _hd("SUPPLY CHAIN", "the multi-level chain — where the bottlenecks (and beta) are · from your research")
+    st.markdown("<div class='wr-lbl'>Photonics / AI 12-Layer Supply Chain (bottleneck depth)</div>", unsafe_allow_html=True)
+    rows = ""
+    for l in G.supply_chain_layers():
+        mono = l.get("monopoly", ""); risk = l.get("geopolitical_risk", "")
+        rc = "#f85149" if ("HARD" in str(mono).upper() or risk == "HIGH") else "#d6a429" if risk == "MEDIUM" else "#8b97a7"
+        rows += (f"<div class='wr-row'><span class='wr-badge' style='color:{rc};background:{rc}1a'>{l.get('layer','')}</span>"
+                 f"<span class='wr-name'>{l.get('name','')}</span>"
+                 f"<span class='wr-why'>{l.get('leader','')} · {mono} · geo-risk {risk}</span></div>")
+    st.markdown(f"{CSS}<div class='wr-box'>{rows}</div>", unsafe_allow_html=True)
+    st.markdown("<div class='wr-note'>Layers with HARD monopoly + HIGH geopolitical risk are the structural chokepoints — where pricing power and thesis upside concentrate. This is the map of where the bottlenecks actually are.</div>", unsafe_allow_html=True)
+
+    st.markdown("<div class='wr-lbl'>Beta-Play Chains — theme → primary → 2nd → 3rd order (beta rises down-chain)</div>", unsafe_allow_html=True)
+    for theme in ["AI", "Power", "Memory"]:
+        mlb = G.multi_level_beta(theme)
+        lvl_html = ""
+        for lvl in mlb["levels"]:
+            chips = " ".join(f"<span class='wr-chip' style='background:#1a2230;color:#c9d4e0'>{p['ticker']}</span>" for p in lvl["picks"]) or "<span class='wr-why'>—</span>"
+            lvl_html += f"<div class='wr-row'><span class='wr-badge' style='color:#6ea8ff;background:#6ea8ff1a'>{lvl['order']}° {lvl['label']}</span><span style='margin-left:auto'>{chips}</span></div>"
+        st.markdown(f"{CSS}<div class='wr-box'><div class='wr-name' style='padding:8px 12px'>{theme} — entry: {mlb['entry']}</div>{lvl_html}</div>", unsafe_allow_html=True)
+    st.markdown("<div class='wr-note'>Primary = direct play (lower beta, more liquid). 3rd-order = deep/hidden beneficiaries (higher beta/convexity, less liquid, higher risk). The chain is how a theme transmits to leveraged plays — the 'picks &amp; shovels' and hidden winners.</div>", unsafe_allow_html=True)
+
+    st.markdown("<div class='wr-lbl'>Market Cap Opportunity — current → scenarios (gap, not price target)</div>", unsafe_allow_html=True)
+    oprows = ""
+    for r in state["ticker_ranking"][:2] + [{"ticker": t} for t in ["MU", "ETN", "COHR"]]:
+        tk = r["ticker"]
+        op = G.market_cap_opportunity(tk, prices.get(tk))
+        scn = op.get("scenarios", {})
+        if scn:
+            gap = f"bull ${scn['bull']['px']} / base ${scn['base']['px']} / bear ${scn['bear']['px']} · EV {op['ev_pct']:+.0f}%"
+        else:
+            gap = "add live price to populate scenarios"
+        oprows += f"<div class='wr-row'><span class='wr-badge' style='color:#3fb950;background:#12301c'>{tk}</span><span class='wr-name'>{op.get('role') or ''}</span><span class='wr-why'>{gap}</span></div>"
+    st.markdown(f"{CSS}<div class='wr-box'>{oprows}</div><div class='wr-note'>Opportunity = gap between current price and scenario-based future value, weighted by probability. Not a target price — a range with asymmetry. Full DCF/revenue/margin decomposition needs fundamental data (your feed).</div>", unsafe_allow_html=True)
+
+# ───────────────────────── COMPANIES ─────────────────────────
+with tabs[5]:
+    _hd("COMPANIES", "68 curated names by supply-chain layer · catalysts · institutional rotation")
+    st.markdown("<div class='wr-lbl'>Companies by Layer (★ = consensus conviction across institutional accounts)</div>", unsafe_allow_html=True)
+    for layer, names in G.companies_by_layer().items():
+        chips = ""
+        for r in names[:10]:
+            stars = "★" * (r.get("stars", 0) or 0)
+            chips += f"<span class='wr-chip' style='background:#1a2230;color:#c9d4e0'>{r.get('ticker')} <span style='color:#3fb950'>{stars}</span></span>"
+        st.markdown(f"{CSS}<div class='wr-box' style='padding:8px 12px'><div class='wr-name' style='font-size:12px;color:#8b97a7'>{layer}</div><div style='margin-top:6px'>{chips}</div></div>", unsafe_allow_html=True)
+
+    st.markdown("<div class='wr-lbl'>Catalyst Timeline (upcoming events from your research)</div>", unsafe_allow_html=True)
+    crows = ""
+    for c in G.catalysts():
+        pc = {"HIGH": "#f85149", "TOP": "#f85149", "MEDIUM": "#d6a429"}.get(c.get("priority", ""), "#8b97a7")
+        crows += f"<div class='wr-row'><span class='wr-badge' style='color:{pc};background:{pc}1a'>{c.get('quarter','')}</span><span class='wr-name'>{c.get('ticker','')}</span><span class='wr-why'>{c.get('event','')}</span></div>"
+    st.markdown(f"{CSS}<div class='wr-box'>{crows}</div>", unsafe_allow_html=True)
+
+    st.markdown("<div class='wr-lbl'>Institutional Rotation Phases</div>", unsafe_allow_html=True)
+    rrows = ""
+    for r in G.rotation_phases():
+        sc = {"ACTIVE": "#3fb950", "EARLY": "#6ea8ff", "NEXT": "#d6a429"}.get(r.get("status", ""), "#8b97a7")
+        tks = r.get("tickers", ""); tks = ", ".join(tks) if isinstance(tks, list) else tks
+        rrows += f"<div class='wr-row'><span class='wr-badge' style='color:{sc};background:{sc}1a'>{r.get('status','')}</span><span class='wr-name'>{r.get('theme','')}</span><span class='wr-why'>{r.get('timeline','')} · {str(tks)[:44]}</span></div>"
+    st.markdown(f"{CSS}<div class='wr-box'>{rrows}</div>", unsafe_allow_html=True)
+
+    ma = G.ma_watchlist(); rf = G.risk_flags()
+    if ma:
+        st.markdown("<div class='wr-lbl'>M&amp;A Watchlist</div>", unsafe_allow_html=True)
+        marows = "".join(f"<div class='wr-row'><span class='wr-badge' style='color:#6ea8ff;background:#6ea8ff1a'>{m.get('probability','')}</span><span class='wr-name'>{m.get('target','')}</span><span class='wr-why'>acq: {m.get('potential_acquirer','')} · {m.get('catalyst','')}</span></div>" for m in ma)
+        st.markdown(f"{CSS}<div class='wr-box'>{marows}</div>", unsafe_allow_html=True)
+    if rf:
+        st.markdown("<div class='wr-lbl'>Risk Flags (what would break the thesis)</div>", unsafe_allow_html=True)
+        rfrows = "".join(f"<div class='wr-row'><span class='wr-badge' style='color:#f85149;background:#f851491a'>{f.get('impact','')}</span><span class='wr-name'>{f.get('flag','')}</span><span class='wr-why'>trigger: {f.get('trigger','')}</span></div>" for f in rf)
+        st.markdown(f"{CSS}<div class='wr-box'>{rfrows}</div>", unsafe_allow_html=True)
+
+# ───────────────────────── KNOWLEDGE GRAPH ─────────────────────────
+with tabs[6]:
     _hd("KNOWLEDGE GRAPH", "the connected network — shock propagates through typed edges to names")
     shock = st.selectbox("Shock at:", sorted(set(e["from"] for e in G.EDGES)), index=0)
     direction = st.radio("Direction:", ["up", "down"], horizontal=True)
@@ -218,7 +291,7 @@ with tabs[4]:
     st.markdown(f"<div class='wr-note'>{prop['note']}. Tested edges (green) are validated on real data (dollar hub, p&lt;0.001); structural edges (grey) are grounded economic relationships for reasoning — the graph shows what connects to what, honestly labelled.</div>", unsafe_allow_html=True)
 
 # ───────────────────────── VALIDATION ─────────────────────────
-with tabs[5]:
+with tabs[7]:
     _hd("VALIDATION", "every signal by test status — run python certify.py for the full report")
     signals = [
         ("Cross-asset macro (dollar hub)", "PRODUCTION", "grn", "corr −0.22, p<0.001"),

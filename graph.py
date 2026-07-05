@@ -245,3 +245,60 @@ def devils_advocate(theme):
     base = t["invalidation"] if t else "demand assumption wrong"
     return [base, "consensus already positioned → edge decayed", "capex cycle turns to oversupply",
             "cheaper 2nd-derivative play captures more of the move"]
+
+
+# ═══ RICH INTELLIGENCE ACCESSORS (surface the curated research — brought back from old warroom) ═══
+def supply_chain_layers():
+    """Photonics/AI 12-layer supply chain with leader, monopoly strength, geopolitical risk."""
+    return _ref().get("photonics_12_layer", [])
+
+def companies_by_layer():
+    """68 consensus names grouped by supply-chain layer (role, stars, target, priority)."""
+    ch = _ref().get("consensus_heatmap", [])
+    by = {}
+    for r in ch:
+        by.setdefault(r.get("layer", "Other"), []).append(r)
+    for k in by:
+        by[k] = sorted(by[k], key=lambda x: -(x.get("stars", 0) or 0))
+    return dict(sorted(by.items(), key=lambda kv: -max((r.get("stars", 0) or 0) for r in kv[1])))
+
+def all_companies():
+    return sorted(_ref().get("consensus_heatmap", []), key=lambda x: -(x.get("stars", 0) or 0))
+
+def catalysts():
+    return sorted(_ref().get("catalyst_timeline", []), key=lambda x: str(x.get("quarter", "")))
+
+def rotation_phases():
+    return _ref().get("institutional_rotation", [])
+
+def ma_watchlist():
+    return _ref().get("ma_watchlist", [])
+
+def risk_flags():
+    return _ref().get("risk_flags", [])
+
+def behavioral_macro():
+    return _ref().get("behavioral_macro", {})
+
+def nvidia_playbook():
+    return _ref().get("nvidia_playbook", {})
+
+def market_cap_opportunity(ticker, price=None):
+    """Current → intrinsic → bull → extreme framing (the opportunity gap, not target price)."""
+    rec = next((r for r in _ref().get("consensus_heatmap", []) if (r.get("ticker") or "").upper() == ticker.upper()), None)
+    emc = expected_market_cap(ticker, price) if price else {}
+    scn = emc.get("scenarios", {})
+    return {"ticker": ticker.upper(), "role": rec.get("role") if rec else None,
+            "target_hint": rec.get("target") if rec else None,
+            "current_px": price, "scenarios": scn, "ev_pct": emc.get("ev_pct"),
+            "note": "opportunity = gap between current and scenario-based future value, with probability — not a price target"}
+
+def multi_level_beta(theme):
+    """Explicit multi-level beta chain: primary (1x) → 2nd order → 3rd order, with tickers at each level."""
+    node = THEME_NODE.get(theme, theme)
+    bc = beta_chain(node, 3)
+    return {"theme": theme, "entry": node,
+            "levels": [{"order": 1, "label": "Primary (direct)", "picks": bc["primary"]},
+                       {"order": 2, "label": "2nd order (supplier/enabler)", "picks": bc["second"]},
+                       {"order": 3, "label": "3rd order (deep/hidden)", "picks": bc["third"]}],
+            "note": "beta rises down the chain — 3rd-order names move more but carry more risk (higher convexity, lower liquidity)"}

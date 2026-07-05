@@ -5,7 +5,7 @@ traceable ke test. Ganti versi lama yang bloated.
 
 ## Struktur (FLAT — deploy-ready untuk Streamlit Cloud, app.py di root repo)
 ```
-app.py        # dashboard 6 tab (Streamlit) — MAIN FILE
+app.py        # dashboard 8 tab (Streamlit) — MAIN FILE
 data.py       # universe + loading (cache real → yfinance → sintetis fallback)
 backtest.py   # walk-forward + bootstrap + RS top-decile signal + surge-lift
 engines.py    # SEMUA engine teruji: risk regime, cross-asset, fear-greed/panic, crash-lead, valuation, ranking
@@ -40,6 +40,21 @@ Di mesin lu, data real (cache/yfinance) otomatis kepake — semua angka jadi rea
 | Ticker RS top-decile | RESEARCH | lift 2.14x (alpha belum signifikan) |
 | Knowledge-graph edges | RESEARCH | 3 tested (dollar), sisanya structural |
 | Naive formation+RS BUY | REJECTED | lift 0.85x — no edge |
+
+## Apa yang DILIHAT vs yang di BACKGROUND (sesuai permintaan lu)
+**Ditampilkan (yang lu butuh buat tau arah):**
+- Mission Control — regime, fear-greed, crash risk, valuation, top RS names
+- Macro & Regime — cross-asset playbook, dollar hub, thesis library, playbook
+- Early Warning — panic-bottom, crash lead-time, valuation room
+- Decision — theme→best equity→beta chain→invalidation, shock→names, investment memos
+- **Supply Chain** — photonics 12-layer bottleneck map, beta-play chains (primary→2nd→3rd order), market cap opportunity
+- **Companies** — 68 nama kurasi by layer (★ conviction), catalyst timeline, institutional rotation, M&A watchlist, risk flags
+- Knowledge Graph — shock propagation, typed edges
+- Validation — status tiap sinyal (PRODUCTION/RESEARCH/REJECTED)
+
+**Di background (kalkulasi, ga perlu diliat tiap saat):** walk-forward backtest, bootstrap significance,
+surge-lift, permutation test — semua di `backtest.py` + `certify.py`. Jalanin `python certify.py` kalau
+mau liat bukti validasi. Dashboard ga jalanin ini tiap render (biar cepat).
 
 ## Prinsip
 - Production is earned — cuma yang lolos 4-fold gate jadi sinyal actionable.
