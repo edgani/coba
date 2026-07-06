@@ -98,54 +98,73 @@ def load_fred(allow_live=True):
 
 
 def load_all(markets=None, start="2022-01-01", allow_live=True):
-    """Delegate to YOUR loaders: warroom.data.load (cache→yfinance→synthetic) + warroom.fred.fetch
-    (fredgraph, no key) + gcfis.feeds.typef_idx (IDX). Falls back to the local synthetic only if a
-    loader is unavailable. On your machine these fetch REAL data; the sandbox blocks the network."""
+    """Use v40's PROVEN live loaders (data.loader.load_prices + data.fred_loader.load_fred_series) —
+    the exact path that fetches FRED+Yahoo live for you in v40. Falls back to warroom.data then
+    synthetic only if those are unavailable. In this sandbox the network is blocked, so it falls back;
+    on your machine/Cloud it returns REAL live data like v40 does."""
     markets = markets or list(UNIVERSE.keys())
     prices, ohlcv, sources = {}, {}, {}
-    # ---- prices via warroom.data (your loader) ----
     try:
         from warroom import data as WD
         UNI = {"us": getattr(WD, "US_UNIVERSE", UNIVERSE["us"]),
                "idx": getattr(WD, "IDX_UNIVERSE", UNIVERSE["idx"]),
                "crypto": UNIVERSE["crypto"], "commodity": UNIVERSE["commodity"], "fx": UNIVERSE["fx"]}
-        for m in markets:
-            px, src = WD.load(UNI.get(m, UNIVERSE.get(m, [])), days=500)
-            prices[m] = px; sources[m] = f"warroom.data · {src}"
     except Exception:
-        for m in markets:
-            px, src = load_prices(UNIVERSE.get(m, []), start, allow_live)
-            prices[m] = px; sources[m] = src
-    # ---- OHLCV for the price-signal path (bandarmetrics) ----
-    try:
-        from data.loader import load_ohlcv
-        for m in markets:
-            oh = load_ohlcv(list(prices[m].keys())[:60])
-            if oh: ohlcv[m] = oh
-    except Exception:
-        pass
-    # ---- FRED via warroom.fred (your fetcher) ----
+        UNI = dict(UNIVERSE)
+    # ---- prices + OHLCV via v40's data.loader (yfinance per-ticker, the working path) ----
+    v40_ok = False
+    if allow_live:
+        try:
+            from data.loader import load_prices as _lp, load_ohlcv as _lo
+            for m in markets:
+                tk = UNI.get(m, UNIVERSE.get(m, []))
+                px = _lp(tk)
+                prices[m] = px
+                sources[m] = f"data.loader v40 · {len(px)} live" if px else "data.loader v40 · 0 (network blocked here)"
+                try: ohlcv[m] = _lo(tk)
+                except Exception: ohlcv[m] = {}
+                if px: v40_ok = True
+        except Exception as e:
+            sources["_v40loader"] = f"data.loader failed: {e}"
+    # ---- fallback: warroom.data, then synthetic ----
+    if not v40_ok:
+        try:
+            from warroom import data as WD
+            for m in markets:
+                if prices.get(m): continue
+                px, src = WD.load(UNI.get(m, UNIVERSE.get(m, [])), days=500)
+                prices[m] = px; sources[m] = f"warroom.data · {src}"
+        except Exception:
+            for m in markets:
+                if prices.get(m): continue
+                px, src = load_prices(UNIVERSE.get(m, []), start, allow_live)
+                prices[m] = px; sources[m] = src
+    # ---- FRED via v40's fred_loader (the working path) ----
     fred, fsrc = {}, "unavailable"
     try:
-        from warroom import fred as WF
-        fred = WF.fetch() or {}
-        fsrc = f"warroom.fred · {len(fred)} series" if fred else "warroom.fred · empty (offline)"
+        from data.fred_loader import load_fred_series
+        fred = load_fred_series(force_refresh=allow_live) or {}
+        fsrc = f"data.fred_loader v40 · {len(fred)} series" if fred else "data.fred_loader v40 · 0 (blocked here)"
     except Exception as e:
-        fred, fsrc = {}, f"warroom.fred failed ({e})"
+        try:
+            from warroom import fred as WF
+            fred = WF.fetch() or {}; fsrc = f"warroom.fred · {len(fred)} series"
+        except Exception as e2:
+            fred, fsrc = {}, f"fred unavailable ({e2})"
     # ---- VIX (bundled) ----
     vix = None
     try:
-        import os as _os
-        vp = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "research", "vix.csv")
-        if _os.path.exists(vp):
+        vp = os.path.join(os.path.dirname(os.path.abspath(__file__)), "research", "vix.csv")
+        if os.path.exists(vp):
             v = pd.read_csv(vp); v["DATE"] = pd.to_datetime(v["DATE"]); vix = v.set_index("DATE")["CLOSE"]
     except Exception:
         pass
-    benchpx, bsrc = load_prices([BENCH], start, allow_live)
-    bench = prices.get("us", {}).get(BENCH) if prices.get("us", {}).get(BENCH) is not None else benchpx.get(BENCH)
-    live = any("live" in str(s).lower() or "yfinance" in str(s).lower() for s in sources.values()) or ("series" in fsrc and "empty" not in fsrc)
+    bench = prices.get("us", {}).get(BENCH)
+    if bench is None:
+        bp, _ = load_prices([BENCH], start, allow_live); bench = bp.get(BENCH)
+    live = v40_ok or (len(fred) > 5)
     return {"prices": prices, "ohlcv": ohlcv, "bench": bench, "fred": fred, "vix": vix,
-            "sources": sources, "bench_source": bsrc, "fred_source": fsrc,
+            "sources": sources, "bench_source": "v40" if v40_ok else "fallback", "fred_source": fsrc,
             "overall_source": "LIVE" if live else "SYNTHETIC", "markets": markets}
 
 

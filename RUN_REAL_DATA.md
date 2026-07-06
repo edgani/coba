@@ -1,54 +1,42 @@
-# How to make REAL data load (why you're seeing mock, and the fix)
+# Real data — corrected (you were right: v40 fetches live fine)
 
-## Why the screenshots show mock / NVDA 182 / "needs FRED"
+## What was actually wrong
 
-1. **NVDA 182, fear-greed 58, "needs FRED", "MOCK"** = hardcoded illustrative values in `dashboard.html`.
-   They are placeholders, replaced only when a real run is injected.
-2. **NVDA 182 is not wrong — it's the real 2018 price** from the bundled historical panel. It is NOT today's
-   price because the panel ends 2018-02 and this environment cannot fetch live data.
-3. **On Streamlit Cloud, yfinance gets rate-limited from datacenter IPs** → your loader silently falls back
-   to synthetic → you see mock. This is the #1 reason "the data doesn't load" on a cloud deploy.
+My earlier guess ("Yahoo rate-limits cloud IPs") was wrong for your setup — **v40 fetches FRED + Yahoo
+live without issue.** The real bug: my `data_layer` was calling `warroom.data.load` (a different loader)
+instead of **v40's proven `data.loader.load_prices` + `data.fred_loader.load_fred_series`** — the exact
+functions your working v40 uses. Fixed: `data_layer.load_all` now uses v40's loaders as the primary path
+(byte-identical to your v40's), so it fetches live the same way v40 does.
 
-## The fix — build the cache locally, commit it (10 minutes)
+## Chain now (Live mode)
 
-Yahoo works from YOUR home IP, not from cloud. So fetch once locally, commit the result, let Cloud read it.
+```
+app.py (Live) → data_layer.load_all(allow_live=True)
+   → data.loader.load_prices(207-name universe)      # yfinance per-ticker (v40's working call)
+   → data.loader.load_ohlcv(...)                     # for the price-signal path
+   → data.fred_loader.load_fred_series()             # WALCL/DGS10/T5YIE/HY-OAS/M2/RRP … live
+→ build_desk → macro_inputs.assemble → run_gcfis(liquidity/fragility/shock/forward_macro inputs)
+→ inject into dashboard.html → header badge = LIVE, real tickers, Mission Control populated
+```
+
+## Run it
 
 ```bash
-# 1) on YOUR machine (not the cloud):
 pip install -r requirements.txt
-python build_cache.py --full          # yf.download your 207-name universe → cache/prices.parquet
-                                       # verify it printed real tickers + a recent date
-
-# 2) commit the cache so the cloud app can read it:
-git add cache/prices.parquet
-git commit -m "real price cache"
-git push                               # redeploy picks it up
-
-# 3) FRED (liquidity/fragility/shock): fredgraph (no key) usually works on cloud, but for reliability:
-#    Streamlit Cloud → your app → Settings → Secrets:  FRED_API_KEY = "your_free_key"
+streamlit run app.py      # pick "Live (your feeds)"
 ```
+FRED liquidity uses fredgraph (no key); for reliability set `FRED_API_KEY` in Streamlit secrets.
+The header flips **SYNTHETIC → LIVE**, NVDA shows today's price, fear-greed uses real VIX,
+liquidity/fragility/shock fill from real FRED.
 
-After this, open the app: the green banner shows **"✓ Local price cache found — N tickers, latest <date>"**,
-pick **Live**, and the header badge flips to **REAL DATA / LIVE** — NVDA shows today's price, fear-greed from
-real VIX, liquidity from real FRED. No mock.
+## In this sandbox it still shows synthetic — that's the sandbox, not the code
 
-## If you can't build a cache
+My environment blocks all outbound network (Yahoo/FRED → 403), so when *I* run it, v40's loaders return
+nothing and it falls back to synthetic. That's why I validate on the bundled REAL historical data instead.
+On your machine — where v40 already proves the network works — the same loaders return live data.
 
-Pick **Real S&P history (2013-18)** — it runs the engines on the bundled REAL panel (not synthetic):
-real US tickers, real setups, real macro. Prices are 2018-era (real, just not current). The badge says
-**REAL DATA**, not MOCK.
-
-## How to run the validation tests (and what results to expect)
+## Validation (no feeds needed, run anywhere)
 
 ```bash
-python validate_all.py     # runs all 7 suites on the bundled REAL data (no feeds needed)
+python validate_all.py        # 7 suites on bundled REAL data → see TEST_REPORT.md
 ```
-Expected (see TEST_REPORT.md for the full table):
-- validator controls → **VALIDATOR VALIDATED** (noise→NOISE, planted→TRADEABLE)
-- factor IC → **reproduces your factor_ic.parquet 5/5 exactly**
-- panic-bottom (real VIX) → **+6.6% vs +3.2%, p<0.0001**  ← strongest live edge
-- every engine → **21 PASS / 0 FAIL**
-- alpha discovery (NVDA test) → **price/volume FAILS (IC −0.12)** — needs structural feeds (honest)
-
-If any suite errors on your machine, paste the traceback — that's the only thing I can't reproduce here
-(this sandbox blocks the network, so I validate on the bundled real historical data instead of live).
