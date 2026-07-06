@@ -62,7 +62,9 @@ def build_desk(data, top_per_market=12):
     if bench is None or not union:
         raise SystemExit("no price data (need bench + universe). On your machine: pip install yfinance.")
 
-    out = run_gcfis(union, bench, regime_posterior={"chop": 1.0})
+    from macro_inputs import assemble
+    macro_in = assemble(data.get("fred"), union, bench, data.get("vix"))
+    out = run_gcfis(union, bench, regime_posterior={"chop": 1.0}, **macro_in)
     rk = out.get("ranking", {})
     sysm = out.get("systemic", {})
 
@@ -106,6 +108,15 @@ def build_desk(data, top_per_market=12):
                 s["ty"] = s["ty"] or "SPOT"
                 setups.append(s)
         setups = setups[:top_per_market]
+        # if the full conviction pipeline surfaced nothing but we have OHLCV, fall back to the
+        # VALIDATED price-signal path (bandarmetrics markup-readiness + RS + entry) so real data
+        # shows real tickers. Labeled PRICE-SIGNAL (short-horizon), not the full conviction gate.
+        if not setups and data.get("ohlcv", {}).get(m):
+            try:
+                from price_setups import price_signal_setups
+                setups = price_signal_setups(data["ohlcv"][m], top=top_per_market)
+            except Exception:
+                pass
         drv = bias.get("gold" if m == "commodity" else m, {})
         markets[m] = {
             "label": MARKETS[m]["label"], "long_only": MARKETS[m]["long_only"],

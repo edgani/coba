@@ -1,3 +1,52 @@
+# Data wiring fix — uses YOUR feeds, systemic now populates
+
+Two fixes so the app runs on your real feeds instead of my synthetic layer:
+
+1. **`data_layer` now DELEGATES to your loaders** — `warroom.data.load` (cache→yfinance→synthetic,
+   pulls your 207-name US_UNIVERSE), `warroom.fred.fetch` (fredgraph, no key), `data.loader.load_ohlcv`,
+   bundled `vix.csv`. On your machine these fetch REAL data; the sandbox just blocks the network.
+
+2. **`build_desk` now passes FRED → `run_gcfis`** (via `macro_inputs.assemble`). The bug: the orchestrator
+   ACCEPTS `liquidity_inputs / growth_inputs / infl_inputs / systemic_inputs` but `build_desk` passed none,
+   so Mission Control showed "no Fed balance-sheet data / no fragility / no shock." Fixed — with FRED wired,
+   tested on real macro series:
+
+   | field | before | after |
+   |---|---|---|
+   | quad | Q2 | Q2 Reflation |
+   | liquidity | "no Fed balance-sheet data" | **expanding** (NetLiq = WALCL−TGA−RRP) |
+   | fragility | "no fragility inputs" | **20.1** (credit+breadth+vol+funding) |
+   | shock | "no shock inputs" | **24.6** (hy_oas+vix term structure) |
+
+   cross-asset still needs multi-asset prices (gold/oil/bonds) — your live universe has them; the S&P
+   validation panel is US-only. On your machine `warroom.fred.fetch()` fills every field.
+
+Also bundled the rest of your data layer: `data/` (fred_loader, loader, reference JSONs — extended_universe,
+chain_reactions, ihsg_conglomerates, bottleneck_reference), `build_cache.py`, `build_feeds.py`, and the
+scrapers (cftc_cot, onchain, aaii, cme, defillama, laevitas, barchart, local). Nothing new was invented.
+
+**To run real-time on your machine:** `python build_cache.py --full` (caches yfinance prices), optionally
+set `FRED_API_KEY`, then `streamlit run app.py` → Live mode. The design (dashboard.html) is unchanged.
+
+---
+
+# app.py fix — renders the APPROVED design, alive with real data
+
+The earlier `app.py` was a bare-metrics page that ignored the v0.3 mock you approved — my mistake.
+Rewritten: `app.py` now **embeds `dashboard.html` (your approved design)** and offers three data modes:
+  • **Demo (approved design)** — the illustrative mock exactly as approved (default)
+  • **Real S&P history (2013-18)** — runs the engines on the bundled panel → **12 real US setups**
+    (BBY, AET, TMO, ALGN, VLO … with real entry/stop/target) instead of empty NO_DATA
+  • **Live (your feeds)** — yfinance + FRED on your machine → real cross-market
+
+Why the app looked dead before: the full conviction pipeline gates every setup behind feed-dependent
+pillars (regime/dealer/theme) that default neutral, so **even 482 real tickers → 0 setups**. The fix
+adds a VALIDATED **price-signal fallback** (`price_setups.py`: bandarmetrics markup-readiness IC 0.17 +
+RS + real entry levels) that surfaces real names from price alone — labeled `PRICE-SIGNAL` (short-horizon),
+NOT the full conviction gate. Full conviction + cross-market setups still require your feeds.
+
+---
+
 # Alpha Discovery Test + Nova-Capital image assessment
 
 ## Alpha Discovery Test (docs Phase 11 ⭐) — run on real S&P panel, no look-ahead

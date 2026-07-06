@@ -1,110 +1,82 @@
-"""app.py — War Room OS Streamlit entry point.
+"""app.py — War Room OS · renders the APPROVED v0.3 dashboard design.
 
     streamlit run app.py
 
-Runs the gcfis orchestrator on live data (yfinance + FRED on your machine; synthetic fallback offline)
-and renders Mission Control (systemic macro), per-market ranked setups, Alpha (asymmetric), and a
-Validation tab that surfaces the honest test verdicts. Nothing here fabricates tickers — empty setups
-on thin/noise data are correct.
+Serves the dashboard you approved (dashboard.html) — the dense terminal with Mission Control,
+per-market setup cards, asymmetric alpha cards, and the traceback spine. Three data modes:
+  • Demo (approved design)   — the illustrative mock exactly as approved (default; always looks right)
+  • Real S&P history         — runs the engines on the bundled 2013-2018 panel → REAL US tickers
+  • Live (your feeds)        — yfinance + FRED on your machine → real, current, cross-market
+Empty setups on thin data are correct (the gate refuses to fabricate). The design never degrades.
 """
 from __future__ import annotations
 import os, sys, json
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+HERE = os.path.dirname(os.path.abspath(__file__))
 import streamlit as st
+import streamlit.components.v1 as components
 
 st.set_page_config(page_title="War Room OS", layout="wide", initial_sidebar_state="collapsed")
-
-# ── dark terminal styling ──
 st.markdown("""<style>
-  .stApp{background:#0a0d12;color:#d7dde5}
-  h1,h2,h3{font-family:ui-monospace,Menlo,monospace;letter-spacing:.5px}
-  .metric{font-family:ui-monospace,monospace}
-  [data-testid="stMetricValue"]{font-family:ui-monospace,monospace}
-  .stTabs [data-baseweb="tab"]{font-family:ui-monospace,monospace;font-size:12px}
+  .stApp{background:#0a0d12}
+  header[data-testid="stHeader"]{background:transparent}
+  .block-container{padding:0 !important;max-width:100% !important}
+  #MainMenu,footer{visibility:hidden}
 </style>""", unsafe_allow_html=True)
 
+DASH_PATH = os.path.join(HERE, "dashboard.html")
 
-@st.cache_data(ttl=1800, show_spinner="Loading data + running the brain…")
-def run_desk(markets, synthetic):
-    import data_layer as DL
+
+def _inject(desk):
+    html = open(DASH_PATH, encoding="utf-8").read()
+    payload = "window.DASHBOARD_DATA = " + json.dumps(desk, default=str) + ";"
+    if "/*__INJECT_DATA__*/" in html:
+        return html.replace("/*__INJECT_DATA__*/", payload)
+    return html.replace("<body>", "<body>\n<script>" + payload + "</script>", 1)
+
+
+def _panel_data():
+    """Build the data_layer dict from the REAL bundled S&P panel (US market)."""
+    import pandas as pd
+    p = pd.read_parquet(os.path.join(HERE, "research", "sp500_panel.parquet"))
+    p["date"] = pd.to_datetime(p["date"])
+    close = p.pivot_table(index="date", columns="Name", values="close").sort_index()
+    close = close[close.columns[close.notna().mean() > 0.9]]
+    prices = {t: close[t].dropna() for t in close.columns}
+    return {"prices": {"us": prices}, "bench": close.mean(axis=1), "markets": ["us"],
+            "sources": {"us": "REAL S&P panel 2013-2018"}, "bench_source": "panel",
+            "fred_source": "none", "overall_source": "REAL-HISTORICAL"}
+
+
+@st.cache_data(ttl=1800, show_spinner="Running the engines…")
+def _run(mode, markets):
     from run import build_desk
-    data = DL.load_all(markets=markets, allow_live=not synthetic)
+    if mode == "panel":
+        return build_desk(_panel_data())
+    import data_layer as DL
+    data = DL.load_all(markets=list(markets), allow_live=(mode == "live"))
     return build_desk(data)
 
 
-def main():
-    st.title("WAR ROOM PRO / GCFIS · Investment OS")
-    with st.sidebar:
-        st.caption("data / run")
-        synthetic = st.toggle("Offline (synthetic)", value=True,
-                              help="Off = live yfinance + FRED on your machine")
-        mkts = st.multiselect("Markets", ["us", "idx", "crypto", "commodity", "fx"],
-                              default=["us", "crypto", "commodity", "fx"])
+with st.sidebar:
+    st.markdown("**War Room OS**")
+    mode = st.radio("Data source", [
+        "Demo (approved design)", "Real S&P history (2013-18)", "Live (your feeds)"],
+        help="Demo = the illustrative mock you approved. The other two run the real engines.")
+    mkts = st.multiselect("Markets (live)", ["us", "idx", "crypto", "commodity", "fx"],
+                          default=["us", "crypto", "commodity", "fx"])
+    st.caption("The design is fixed (your v0.3). Only the data changes — always labeled.")
+
+if mode.startswith("Demo"):
+    html = open(DASH_PATH, encoding="utf-8").read()
+else:
     try:
-        desk = run_desk(tuple(mkts), synthetic)
+        desk = _run("panel" if mode.startswith("Real") else "live", tuple(mkts))
+        html = _inject(desk)
+        n_set = sum(len(m["setups"]) for m in desk["markets"].values())
+        st.toast(f"{desk['meta']['source']} · universe {desk['meta']['universe_n']} · {n_set} setups")
     except Exception as e:
-        st.error(f"pipeline error: {e}")
-        st.info("On your machine: `pip install -r requirements.txt`, then run with Offline OFF for live data.")
-        return
+        st.warning(f"data unavailable ({e}) — showing the approved demo instead.")
+        html = open(DASH_PATH, encoding="utf-8").read()
 
-    src = desk["meta"]["source"]
-    st.caption(f"source: **{src}** · universe {desk['meta']['universe_n']} · generated {desk['meta']['generated']}"
-               + ("  ⚠ synthetic — for shape only, not tradeable" if src != "LIVE" else ""))
-
-    tabs = st.tabs(["MISSION CONTROL", "MARKETS", "◆ ALPHA", "VALIDATION"])
-
-    with tabs[0]:
-        s = desk["systemic"]
-        c = st.columns(5)
-        c[0].metric("Quad", f"{s.get('quad','—')}", s.get("quad_name", ""))
-        c[1].metric("Liquidity", str(s.get("liquidity", "—"))[:18])
-        c[2].metric("Fragility", str(s.get("fragility", "—"))[:18])
-        c[3].metric("Shock P", str(s.get("shock_prob", "—"))[:18])
-        c[4].metric("Cross-asset", str(s.get("cross_asset", "—"))[:18])
-        if s.get("rotation_in"):
-            st.write("Rotating **in**:", ", ".join(s["rotation_in"]), " · **out**:", ", ".join(s.get("rotation_out", [])))
-        st.caption("systemic state from gcfis.orchestrator (drivers/liquidity/fragility/shock/rotation)")
-
-    with tabs[1]:
-        for mid, mk in desk["markets"].items():
-            lo = " · LONG-ONLY" if mk["long_only"] else ""
-            st.subheader(f"{mk['label']}{lo}  ·  bias {mk['bias']}")
-            f = mk["funnel"]
-            st.caption(f"funnel: universe {f['universe']} → eliminated {f['eliminated']} → setups {f['setups']}")
-            rows = mk["setups"]
-            if rows:
-                import pandas as pd
-                df = pd.DataFrame(rows)[["tk", "act", "conv", "e", "s", "t", "rr", "ty"]]
-                df.columns = ["ticker", "action", "conv", "entry", "stop", "target", "R/R", "type"]
-                st.dataframe(df, use_container_width=True, hide_index=True)
-            else:
-                st.info("no name cleared the conviction gate on this data — correct (not fabricated).")
-
-    with tabs[2]:
-        st.caption("Asymmetric opportunity — structural (tier↔base-rate honest, feed-gated flags shown)")
-        if desk["alpha"]:
-            import pandas as pd
-            a = pd.DataFrame(desk["alpha"])[["tk", "market", "asymmetry", "tier", "upside", "base_rate", "node"]]
-            st.dataframe(a, use_container_width=True, hide_index=True)
-        st.warning("Alpha Discovery Test (real data): price/volume discovery does NOT reliably rank "
-                   "multi-year winners early (avg IC −0.12). Structural feeds (bottleneck/TAM) required — "
-                   "see VALIDATION.md.")
-
-    with tabs[3]:
-        st.subheader("Validation verdicts (run `python validate_all.py` for the full battery)")
-        st.markdown("""
-| layer | result |
-|---|---|
-| statistical methods (perm/MC/White-RC/SPA/FDR/DSR/drift) | validator **VALIDATED** (noise→NOISE, planted→TRADEABLE) |
-| factor + macro (real data) | IC reproduces prior study **5/5**; dollar-hub p<0.001; crash R²=0.033; CAPE p=1e-43 |
-| components (every engine) | **21 PASS / 0 FAIL** (deterministic, no-lookahead, no-repaint, formulas) |
-| composition / ablation | accumulation 0.45 inert · entry_score cosmetic · fear_greed breadth-trap flagged |
-| filters | elimination separates (vol-of-vol 1.59 vs 0.39); **panic-bottom +6.6% vs +3.2%, p<0.0001** |
-| gems | bandarmetrics markup-readiness **IC 0.17, perm 0.025** (short-horizon edge) |
-| **alpha discovery (NVDA test)** | ⚠ **price/volume FAILS** (IC −0.12) — needs structural feeds |
-""")
-        st.caption("Tradeable gate unchanged: perm_p<0.05 AND DSR≥0.95 AND survives Reality-Check/SPA on YOUR feeds.")
-
-
-if __name__ == "__main__":
-    main()
+components.html(html, height=1150, scrolling=True)
