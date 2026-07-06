@@ -495,6 +495,10 @@ const ALPHA=[
   gated:"COT via cftc_cot_scraper (RESCUE, FREE)",why:"structural supply deficit + demand step-change"},
 ];
 function viewAlpha(){
+  const _D=window.DASHBOARD_DATA, _real=_D&&_D.meta&&_D.meta.source!=='SYNTHETIC';
+  const _banner = _real
+    ? `<div class="mockbanner" style="border-color:rgba(46,193,111,.35);background:rgba(46,193,111,.06)"><span class="b prod">● ${_D.meta.source==='LIVE'?'LIVE':'REAL DATA'}</span><span class="mbx">Real run · source <b style="color:var(--up)">${_D.meta.source}</b> · universe ${_D.meta.universe_n}. Structural asymmetry from your engines. Feed-gated factors (valuation/coverage/mcap) stay neutral until fundamentals are wired — score differentiates once they're live.</span></div>`
+    : `<div class="mockbanner"><span class="b res">◆ MOCK</span><span class="mbx">Synthetic values — showing <b style="color:var(--amb)">output shape</b>. Universe today = <b>US 63 names/10 domains</b>; crypto/IHSG cards illustrate the <b>extension</b> (rescue onchain/cot/fx feeds). Asymmetry is STRUCTURAL, not a return forecast — most tier-4/5 fail.</span></div>`;
   const cards=ALPHA.map(a=>`<div class="acard" data-tk="${a.tk}">
     <div class="top"><div><div class="tk">${a.tk}</div><span class="mk">${a.mkt}</span></div>
       <div class="asym"><div class="av">${a.asym}</div><div class="al">ASYMMETRY</div></div></div>
@@ -511,7 +515,7 @@ function viewAlpha(){
   return `
   <div class="viewhead"><h2 class="th">◆ ALPHA &amp; TICKERS — Asymmetric Opportunity</h2><span class="vd">Structural asymmetry (not expected return). Tiers SEPARATED. Ticker = consequence.</span></div>
   <div class="provrow">${badge('eng','◆ asymmetric_discovery.py')}${badge('eng','◆ moonshot_universe.py')}${badge('eng','◆ market_cap_target.py')}${badge('eng','◆ competitive_ranking_engine.py')}${badge('eng','◆ signal_edge.py')}${badge('res','◐ 3/6 factors need feeds')}</div>
-  <div class="mockbanner"><span class="b res">◆ MOCK</span><span class="mbx">Synthetic values — showing <b style="color:var(--amb)">output shape</b>. Universe today = <b>US 63 names/10 domains</b>; crypto/IHSG cards illustrate the <b>extension</b> (rescue onchain/cot/fx feeds). Asymmetry is STRUCTURAL, not a return forecast — most tier-4/5 fail.</span></div>
+  ${_banner}
   <div class="cards">${cards}</div>`;
 }
 
@@ -632,10 +636,11 @@ function viewMarket(id){
   const D = window.DASHBOARD_DATA; if(!D) return;
   try{
     const b=document.querySelector('.mockbadge .pill.warn');
-    const live = D.meta.source==='LIVE';
-    b.textContent = (live?'LIVE · ':'SYNTHETIC RUN · ')+(D.meta.generated||'');
-    b.style.background = live ? 'var(--up)' : 'var(--amb)';
-    document.querySelector('.mockbadge .pill').textContent = 'v0.3 · universe '+(D.meta.universe_n||'?');
+    const real = D.meta.source && D.meta.source!=='SYNTHETIC';
+    b.textContent = (real?(D.meta.source==='LIVE'?'LIVE · ':'REAL DATA · '):'SYNTHETIC RUN · ')+(D.meta.generated||'');
+    b.style.background = real ? 'var(--up)' : 'var(--amb)';
+    b.style.borderColor = real ? 'var(--up)' : 'var(--amb)';
+    document.querySelector('.mockbadge .pill').textContent = (real?'REAL':'v0.3')+' · universe '+(D.meta.universe_n||'?');
   }catch(e){}
   const esc=s=>String(s==null?'':s).replace(/</g,'&lt;').replace(/>/g,'&gt;');
   // ALPHA (mutate in place → existing renderer works)

@@ -2,12 +2,11 @@
 
     streamlit run app.py
 
-Serves the dashboard you approved (dashboard.html) — the dense terminal with Mission Control,
-per-market setup cards, asymmetric alpha cards, and the traceback spine. Three data modes:
-  • Demo (approved design)   — the illustrative mock exactly as approved (default; always looks right)
-  • Real S&P history         — runs the engines on the bundled 2013-2018 panel → REAL US tickers
-  • Live (your feeds)        — yfinance + FRED on your machine → real, current, cross-market
-Empty setups on thin data are correct (the gate refuses to fabricate). The design never degrades.
+Serves the dashboard you approved (dashboard.html). Data modes:
+  • Real S&P history (default) — engines on the bundled 2013-18 panel + real macro → REAL US tickers
+  • Live (your feeds)          — warroom.data + warroom.fred on your machine → real, current, cross-market
+  • Demo (approved design)     — the illustrative mock, exactly as approved
+The design never degrades; only the data does, and the badge always says which.
 """
 from __future__ import annotations
 import os, sys, json
@@ -36,19 +35,33 @@ def _inject(desk):
 
 
 def _panel_data():
-    """Build the data_layer dict from the REAL bundled S&P panel (US market)."""
+    """REAL bundled data: US prices + OHLCV + real macro (rate10/gold/oil/dxy) + VIX. No synthetic Fed."""
     import pandas as pd
-    p = pd.read_parquet(os.path.join(HERE, "research", "sp500_panel.parquet"))
-    p["date"] = pd.to_datetime(p["date"])
-    close = p.pivot_table(index="date", columns="Name", values="close").sort_index()
-    close = close[close.columns[close.notna().mean() > 0.9]]
-    prices = {t: close[t].dropna() for t in close.columns}
-    return {"prices": {"us": prices}, "bench": close.mean(axis=1), "markets": ["us"],
-            "sources": {"us": "REAL S&P panel 2013-2018"}, "bench_source": "panel",
-            "fred_source": "none", "overall_source": "REAL-HISTORICAL"}
+    RES = os.path.join(HERE, "research")
+    p = pd.read_parquet(os.path.join(RES, "sp500_panel.parquet")); p["date"] = pd.to_datetime(p["date"])
+    piv = lambda c: p.pivot_table(index="date", columns="Name", values=c).sort_index()
+    close, vol, hi, lo, op = piv("close"), piv("volume"), piv("high"), piv("low"), piv("open")
+    keep = close.columns[close.notna().mean() > 0.9]; close = close[keep]
+    prices = {t: close[t].dropna() for t in keep}
+    ohlcv = {t: pd.DataFrame({"Open": op[t], "High": hi[t], "Low": lo[t], "Close": close[t], "Volume": vol[t]}) for t in keep}
+    fred, vix = {}, None
+    try:
+        mp = pd.read_parquet(os.path.join(RES, "macro_panel.parquet"))
+        if "rate10" in mp.columns: fred["DGS10"] = mp["rate10"].dropna()
+        for col, tk in [("gold", "GC=F"), ("oil", "CL=F"), ("dxy", "DX-Y.NYB")]:
+            if col in mp.columns: prices[tk] = mp[col].dropna()
+    except Exception: pass
+    try:
+        v = pd.read_csv(os.path.join(RES, "vix.csv")); v["DATE"] = pd.to_datetime(v["DATE"])
+        vix = v.set_index("DATE")["CLOSE"]
+    except Exception: pass
+    return {"prices": {"us": prices}, "ohlcv": {"us": ohlcv}, "bench": close.mean(axis=1),
+            "markets": ["us"], "fred": fred, "vix": vix, "sources": {"us": "REAL S&P panel 2013-2018"},
+            "bench_source": "panel", "fred_source": "real macro (panel); FRED liquidity = Live mode",
+            "overall_source": "REAL-HISTORICAL"}
 
 
-@st.cache_data(ttl=1800, show_spinner="Running the engines…")
+@st.cache_data(ttl=1800, show_spinner="Running the engines on real data…")
 def _run(mode, markets):
     from run import build_desk
     if mode == "panel":
@@ -60,12 +73,31 @@ def _run(mode, markets):
 
 with st.sidebar:
     st.markdown("**War Room OS**")
-    mode = st.radio("Data source", [
-        "Demo (approved design)", "Real S&P history (2013-18)", "Live (your feeds)"],
-        help="Demo = the illustrative mock you approved. The other two run the real engines.")
+    _cache = os.path.join(HERE, "cache", "prices.parquet")
+    _has_cache = os.path.exists(_cache)
+    _opts = ["Live (your feeds)", "Real S&P history (2013-18)", "Demo (approved design)"] if _has_cache \
+        else ["Real S&P history (2013-18)", "Live (your feeds)", "Demo (approved design)"]
+    mode = st.radio("Data source", _opts,
+        help="Live reads cache/prices.parquet (real current prices) if you built it; else falls back.")
     mkts = st.multiselect("Markets (live)", ["us", "idx", "crypto", "commodity", "fx"],
                           default=["us", "crypto", "commodity", "fx"])
-    st.caption("The design is fixed (your v0.3). Only the data changes — always labeled.")
+    st.caption("Design is fixed (your v0.3). Only the data changes — badge shows which.")
+
+# ── unambiguous data-source status (so you SEE whether real data loaded) ──
+_cache = os.path.join(HERE, "cache", "prices.parquet")
+if os.path.exists(_cache):
+    try:
+        import pandas as _pd
+        _df = _pd.read_parquet(_cache)
+        _n = _df.columns.get_level_values(0).nunique() if hasattr(_df.columns, "get_level_values") else len(_df.columns)
+        st.success(f"✓ Local price cache found — {_n} tickers, latest {str(_df.index.max())[:10]}. "
+                   f"Live mode uses REAL current prices.")
+    except Exception:
+        st.info("Local cache present but unreadable — rebuild with `python build_cache.py --full`.")
+else:
+    st.warning("⚠ No local price cache → Live mode can't show current prices (Yahoo rate-limits cloud IPs). "
+               "Run `python build_cache.py --full` locally, commit cache/prices.parquet, redeploy. "
+               "Meanwhile 'Real S&P history' shows REAL 2013-18 data (NVDA≈182 = its real 2018 price, not today's).")
 
 if mode.startswith("Demo"):
     html = open(DASH_PATH, encoding="utf-8").read()
@@ -73,8 +105,8 @@ else:
     try:
         desk = _run("panel" if mode.startswith("Real") else "live", tuple(mkts))
         html = _inject(desk)
-        n_set = sum(len(m["setups"]) for m in desk["markets"].values())
-        st.toast(f"{desk['meta']['source']} · universe {desk['meta']['universe_n']} · {n_set} setups")
+        n = sum(len(m["setups"]) for m in desk["markets"].values())
+        st.toast(f"{desk['meta']['source']} · universe {desk['meta']['universe_n']} · {n} setups")
     except Exception as e:
         st.warning(f"data unavailable ({e}) — showing the approved demo instead.")
         html = open(DASH_PATH, encoding="utf-8").read()
