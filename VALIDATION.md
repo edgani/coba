@@ -1,3 +1,42 @@
+# Alpha Discovery Test + Nova-Capital image assessment
+
+## Alpha Discovery Test (docs Phase 11 ⭐) — run on real S&P panel, no look-ahead
+
+`python alpha_discovery_test.py` — as of 2014/2015/2016, rank the universe by the validated
+price/volume discovery signals (RS + bandarmetrics markup-readiness) and check if the eventual
+winners ranked top.
+
+| as-of | rank-IC | top-decile lift | NVDA rank | verdict |
+|---|---|---|---|---|
+| 2014-06 | −0.086 | 0.94x | top-26% | miss |
+| 2015-06 | +0.036 | 1.26x | top-75% | weak |
+| 2016-06 | −0.299 | 0.31x | **top-decile** ★ | mixed |
+
+**avg IC −0.12, avg lift 0.84x → price/volume discovery does NOT reliably find multi-year winners early.**
+It caught NVDA/AMD top-decile in 2016 but ranked them mid/bottom in 2014-15 (MU was *bottom* percentile
+before +205%). **Honest conclusion:** markup-readiness is a real *short-horizon* signal (42d, IC 0.17),
+NOT a multi-year winner-finder. The NVDA-type discovery you designed needs the STRUCTURAL alpha layer
+(bottleneck/TAM/capacity/asymmetry) + fundamental/cross-market feeds — proven necessary, not optional.
+
+## Nova-Capital terminal (11 images) — what to take vs what we have
+
+| their component | us | action |
+|---|---|---|
+| Country regime grid (18 ctry Goldilocks/Deflasi/…) | ✅ **have** (`country_regime`, 16) | extend to 18 |
+| Smart-Money / COT positioning (SPX/NDX/DJI extremes) | ✅ **have** (`cftc_cot_scraper` — rescued) | wire on your machine |
+| Global bond-yield / real-yield table | ✅ **have data** (`macro_panel` + `fx_carry_engine`) | render as table |
+| Macro Global policy statements (Fed/BOJ/BI) | ◑ partial (`macro`) — the STATEMENT text needs a news feed | flag, feed-gated |
+| Market Catalyst (news→theme, dominance %) | ✗ **new** — needs a news/NLP feed | not adding unvalidated |
+| Economic Surprise Index (actual vs consensus) | ✗ **new** (= Surprise Engine, doc5 #17) — needs consensus feed | not adding unvalidated |
+| Reddit/WSB retail sentiment | ✗ **new** (= Crowding, doc4 L4) — needs social feed | not adding unvalidated |
+
+**Verdict:** the analytical substance (regime, COT, yields, macro) we already have. The 3 genuinely-new
+panels (news catalyst, economic surprise, retail crowding) all need external feeds we don't have — so per
+your own rule ("add only if validated by test"), I am **not** adding them as unvalidated stubs. They're
+listed as feed-gated additions for when those feeds are wired, each to be validated before it ships.
+
+---
+
 # Re-audit additions — 5 more engines pulled, each validated on real data
 
 `python gem_validation.py` — runs each newly-extracted engine on the real panel. Kept because the

@@ -29,7 +29,8 @@ warroom_os/
 ```bash
 pip install -r requirements.txt
 
-python run.py --synthetic     # offline: proves the pipeline runs end-to-end (0 setups on noise = correct)
+streamlit run app.py         # the dashboard (main file = app.py)
+python run.py --synthetic     # headless: offline: proves the pipeline runs end-to-end (0 setups on noise = correct)
 python run.py                 # your machine: live yfinance + FRED → desk_data.json + dashboard_live.html
 python validate_all.py        # the entire validation stack (statistical + real-data + component)
 ```

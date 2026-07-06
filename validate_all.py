@@ -8,7 +8,7 @@
 """
 import subprocess, sys, os
 HERE = os.path.dirname(os.path.abspath(__file__))
-for script in ["validation_plus.py", "validate_real.py", "component_validation.py", "composition_audit.py", "filter_validation.py", "gem_validation.py"]:
+for script in ["validation_plus.py", "validate_real.py", "component_validation.py", "composition_audit.py", "filter_validation.py", "gem_validation.py", "alpha_discovery_test.py"]:
     print("\n" + "#" * 90 + f"\n# {script}\n" + "#" * 90)
     subprocess.run([sys.executable, os.path.join(HERE, script)])
 print("\n" + "=" * 90)
