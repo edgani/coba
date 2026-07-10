@@ -193,8 +193,8 @@
   <div class="logo">WAR ROOM <b>PRO</b> / GCFIS</div>
   <div class="sub">Investment OS · engine-mapped from your v40 + warroom_pro audit</div>
   <div class="mockbadge">
-    <span class="pill">v0.2 · MOCK</span>
-    <span class="pill warn">SYNTHETIC — NOT VALIDATED</span>
+    <span class="pill" id="verpill">v0.3 · MOCK</span>
+    <span class="pill warn" id="valpill">SYNTHETIC — NOT VALIDATED</span>
     <span class="clock" id="clk">--:--:-- UTC</span>
   </div>
 </header>
@@ -704,6 +704,13 @@ function viewMarket(id){
   window.__LIVE = !!(D.meta && D.meta.source && D.meta.source!=='SYNTHETIC');
   window.__REGIME_TF = D.regime_tf || null;
   window.__REGIONAL = D.regional || null;
+  // flip the header badges so you can SEE the live run took (no more guessing MOCK vs live)
+  if(window.__LIVE){
+    const vp=document.getElementById('verpill'), tp=document.getElementById('valpill');
+    if(vp){ vp.textContent='v0.3 · LIVE'; vp.style.borderColor='rgba(46,193,111,.6)'; vp.style.color='var(--up)'; }
+    if(tp){ const un=(D.meta&&D.meta.universe_n)||0; tp.textContent='● LIVE · '+un+' names'; tp.className='pill'; tp.style.borderColor='rgba(46,193,111,.6)'; tp.style.color='var(--up)'; }
+    const t=document.title; document.title=t.replace('MOCK v0.2','LIVE v0.3');
+  }
   // blank any market NOT loaded this run so it never shows stale mock prices
   if(window.__LIVE && D.markets){
     for(const id in MARKET){

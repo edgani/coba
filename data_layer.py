@@ -117,8 +117,6 @@ def load_all(markets=None, start="2022-01-01", allow_live=True):
         try:
             from data.loader import load_prices as _lp, load_ohlcv as _lo
             for m in markets:
-                if m == "idx":
-                    continue  # IHSG handled by typef_idx (idx.co.id) below — authoritative + foreign flow
                 tk = UNI.get(m, UNIVERSE.get(m, []))
                 px = _lp(tk)
                 prices[m] = px
@@ -148,7 +146,9 @@ def load_all(markets=None, start="2022-01-01", allow_live=True):
             proxies = _lp3(EXTRA_PROXY_TICKERS) or {}
         except Exception:
             proxies = {}
-    if "idx" in markets and not prices.get("idx"):
+    # ---- IHSG/IDX: enrich with idx.co.id (typef_idx) for foreign flow / bandarmologi.
+    #      yfinance (BBCA.JK etc.) above is the reliable base; typef_idx OVERWRITES only if it works. ----
+    if "idx" in markets:
         try:
             from gcfis.feeds.typef_idx import build_typef
             from warroom import data as _WD
@@ -158,12 +158,15 @@ def load_all(markets=None, start="2022-01-01", allow_live=True):
                 col = lambda df: (df["close"] if "close" in df.columns else df["Close"] if "Close" in df.columns else df.iloc[:, 3])
                 prices["idx"] = {tk: col(df) for tk, df in idx_ohlcv.items()}
                 ohlcv["idx"] = {tk: df.rename(columns=str.capitalize) for tk, df in idx_ohlcv.items()}
-                sources["idx"] = f"typef_idx (idx.co.id) · {len(idx_ohlcv)} names"
+                sources["idx"] = f"typef_idx (idx.co.id) · {len(idx_ohlcv)} names + foreign flow"
                 v40_ok = True
+            elif prices.get("idx"):
+                sources["idx"] = f"yfinance base ({len(prices['idx'])}) · typef_idx enrich failed: {idx_status}"
             else:
                 sources["idx"] = f"typef_idx: {idx_status}"
         except Exception as e:
-            sources["idx"] = f"typef_idx failed: {e}"
+            if not prices.get("idx"):
+                sources["idx"] = f"typef_idx failed: {e}"
 
     # ---- fallback: warroom.data, then synthetic ----
     if not v40_ok:

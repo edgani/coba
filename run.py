@@ -129,18 +129,21 @@ def build_desk(data, top_per_market=12):
     bias = market_bias(None)  # driver matrix map (readings None without feeds → honest)
 
     markets = {}
+    _MKDEF = {"label": None, "long_only": False, "drivers": []}
     for m in data["markets"]:
-        univ = list(prices[m].keys())
+        mk_cfg = MARKETS.get(m, {**_MKDEF, "label": m})
+        pm = prices.get(m) or {}            # ← safe: a failed-fetch market (e.g. idx down) no longer KeyErrors
+        univ = list(pm.keys())
         setups = []
         for row in long_rows:
             if market_of(row.get("ticker")) == m:
-                setups.append(_setup_from_ranking(row, prices[m].get(row["ticker"]), "long"))
+                setups.append(_setup_from_ranking(row, pm.get(row["ticker"]), "long"))
         for row in short_rows:
-            if market_of(row.get("ticker")) == m and not MARKETS[m]["long_only"]:
-                setups.append(_setup_from_ranking(row, prices[m].get(row["ticker"]), "short"))
+            if market_of(row.get("ticker")) == m and not mk_cfg["long_only"]:
+                setups.append(_setup_from_ranking(row, pm.get(row["ticker"]), "short"))
         for row in spot_rows:
             if market_of(row.get("ticker")) == m:
-                s = _setup_from_ranking(row, prices[m].get(row["ticker"]), "long")
+                s = _setup_from_ranking(row, pm.get(row["ticker"]), "long")
                 s["ty"] = s["ty"] or "SPOT"
                 setups.append(s)
         setups = setups[:top_per_market]
@@ -155,8 +158,8 @@ def build_desk(data, top_per_market=12):
                 pass
         drv = bias.get("gold" if m == "commodity" else m, {})
         markets[m] = {
-            "label": MARKETS[m]["label"], "long_only": MARKETS[m]["long_only"],
-            "drivers": MARKETS[m]["drivers"],
+            "label": mk_cfg["label"], "long_only": mk_cfg["long_only"],
+            "drivers": mk_cfg["drivers"],
             "bias": drv.get("bias", "NO_DATA"),
             "funnel": {"universe": len(univ),
                        "eliminated": sum(1 for t in univ if t in eliminated),

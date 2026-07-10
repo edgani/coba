@@ -1,39 +1,38 @@
-# What was broken and what I fixed (the 'Run failed: idx' round)
+# THE REAL CRASH — found and fixed (round 2)
 
-## The crash (Q1 + Q2) — FIXED
-`Run failed: 'idx'` on every tab → Streamlit fell back to the raw v0.2 MOCK, which is why
-everything looked synthetic again AND the multi-timeframe quad "disappeared".
+## Why nothing changed last round
+Last round I fixed `union.update(prices[m])` — but that was NOT where it crashed. Proof from your
+screenshot: the Regional Regime panel showed "◆ regional_regime.py ○ mock", so my new code DID
+deploy — yet "Run failed: 'idx'" persisted. The crash was somewhere I hadn't looked.
 
-Root cause = 3 bugs I introduced when wiring idx + macro proxies + regional regime:
-1. `union.update(prices[m])` KeyError'd when a market (idx) failed to fetch → **now `.get(m,{})`**.
-2. Offline/partial loaders return OHLCV DataFrames; the macro/flow/regime engines need 1-D close
-   Series → **build_desk now coerces bench + union to close Series once, up front** (keeps the
-   OHLCV dicts intact for the setup engines that need volume).
-3. Same DataFrame leak in `macro_inputs.py` and `regime_multitf.py` → **both coerce now**.
+## The actual crash (now fixed)
+`run.py`, the per-market loop:  `univ = list(prices[m].keys())`  — bracket-indexed.
 
-Verified end-to-end on all 5 markets with idx deliberately failing: no KeyError, no ValueError,
-regime_tf + systemic + regional all populate.
+It only crashes under ONE condition: **at least one market fetched successfully (v40_ok=True) AND a
+different market is missing from `prices`**. That's your exact live situation: yfinance gets
+us/crypto/commodity/fx, but idx.co.id fails → `prices["idx"]` never set → `prices["idx"].keys()` →
+`KeyError: 'idx'` → Streamlit falls back to the raw MOCK.
 
-## The hardcoded regional row (Q3) — FIXED
-You were right: `IHSG Bull / Japan Bull / …` was **hardcoded HTML** (dashboard lines 285-290),
-computing nothing. That's why it always said Bull regardless of reality.
+My offline sandbox could NEVER reproduce it, because offline `v40_ok=False`, so the synthetic
+fallback fills EVERY market including idx — so `prices["idx"]` always existed here. That blind spot
+is why I missed it twice. I've now simulated your exact condition (some markets present, idx absent)
+and confirmed the fix.
 
-New `regional_regime.py` computes each region's regime from its **real index price** (trend vs
-200d + 3m/1m momentum): Expansion / Late-cycle / Weakening / Recovery / Bear / Neutral.
-Fetches ^GSPC, MCHI, VGK, ^N225, ^BSESN, **^JKSE** (real IHSG), BTC-USD, DBC. So IHSG now reflects
-actual IHSG price action — if it's weak, it shows weak. Labeled honestly as a price-proxy regime
-(not a full macro quad). Regions with no data show "—", never a fake label.
+Fixed: every market access in that loop is now `.get(m)`-guarded (`pm = prices.get(m) or {}`), plus
+`MARKETS[m]` guarded. Tested 3 ways — idx missing, all present, and an unknown market name — no crash.
 
-## Formula audit (Q4) — the two weighted formulas match the code exactly
-- Fear-Greed `0.4·(1-VIXpct) + 0.3·(1-breadth) + 0.3·mom-z` == `early_warning.py:37` ✓
-- Accumulation `0.30·RS + 0.25·VE + 0.20·ΔER + 0.15·own + 0.10·OI` == `accumulation.py:31` ✓
-  (honest caveat already shown on the panel: ΔER/own/OI = 0 without the fundamental/options feed.)
+## Bonus regression fixed: IHSG had no fallback
+I'd made the yfinance loop SKIP idx (relying only on idx.co.id). Since idx.co.id blocks bare
+requests, that left IHSG with zero data. Now yfinance (BBCA.JK, BMRI.JK, …) is the reliable BASE for
+IHSG, and typef_idx only OVERWRITES it (adding foreign-flow/bandarmologi) when idx.co.id actually
+responds. So IHSG loads live either way.
 
-## Tickers (Q5)
-Everything you screenshotted was the MOCK fallback (because of the crash), so those tickers are the
-hardcoded illustrative set. Live, tickers come from the screener I validated on real 2013-18 data
-(ITE replay caught 4/5 winners pre-markup; factor IC 5/5; panic-bottom PRODUCTION). I can't fetch
-live from this sandbox to show you the *current* live tickers — that runs on your machine.
+## You'll now be able to SEE it worked
+The header badge was hardcoded "v0.2 · MOCK" and never flipped. Now when live data loads it turns
+green: **"v0.3 · LIVE · N names"**. If after redeploy it still says MOCK, the run still failed —
+open F12 console and send me the error; it won't be 'idx' anymore.
 
-## Run it
-`streamlit run app.py` → Live. If a panel is still off, F12 console names the exact feed/key.
+## Redeploy
+Extract this zip → push to your `edgani/tes` repo → Streamlit redeploys. Or run locally:
+`streamlit run app.py`. Expected: header flips to LIVE green; us/crypto/commodity/fx populate;
+IHSG populates via yfinance; Mission Control shows the 4-timeframe quad + real regional regime.
