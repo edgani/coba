@@ -315,7 +315,7 @@ function viewMC(){
       <div class="regions">
         ${regionalCells()}
       </div>`)}
-    ${panel('Global Capital Rotation',[['eng','◆ cycle_rotation.py'],['prod','✅ PROD']],`
+    ${panel('Global Capital Rotation',[['eng','◆ cycle_rotation.py'],['res','❌ rotation-momentum REJECTED OOS']],`
       <div class="rot">
         <div class="rstep cold"><div class="rn">CASH</div><div class="rb"><i style="width:30%"></i></div><span class="rflow">›</span></div>
         <div class="rstep cold"><div class="rn">BONDS</div><div class="rb"><i style="width:25%"></i></div><span class="rflow">›</span></div>
@@ -326,7 +326,7 @@ function viewMC(){
         <div class="rstep hot"><div class="rn">MICRO</div><div class="rb"><i style="width:74%;background:var(--up)"></i></div><span class="rflow">›</span></div>
         <div class="rstep hot"><div class="rn">CRYPTO</div><div class="rb"><i style="width:79%;background:var(--up)"></i></div></div>
       </div>
-      <div class="lbl" style="margin-top:9px">Position on curve: <span class="sg">RISK-SEEKING TAIL</span> — late-cycle behavior.</div>`)}
+      <div class="note" style="margin-top:9px">DESCRIPTIVE MAP ONLY — rotation-momentum tested as coin-flip out-of-sample (REJECTED). This shows where capital sits on the risk curve; it is <b>not</b> a validated timing signal. Do not trade off it.</div>`)}
     <div class="grid row3" style="grid-template-columns:1fr 1fr 1fr">
       ${panel('10 Composite Meters',[['eng','◆ meters.py'],['prod','✅ PROD']],rows([
         ['Trend','<span class="u">+62</span>','price-proxy composite'],['Credit','<span class="a">−18</span>','HY/IG proxy'],
@@ -663,7 +663,10 @@ function viewMarket(id){
   const m=MARKET[id];
   const fun=m.funnel.map((f,i)=>`<div class="fstep ${f[3]||''}">${i<m.funnel.length-1?'<span class="farr">›</span>':''}<div class="fn">${f[0]}</div><div class="fl">${f[1]}</div><div class="fg">${f[2]}</div></div>`).join('');
   const drv=rows(m.drivers.map(d=>[d[0],`<span class="${d[1].includes('LONG')||d[1].includes('BULL')||d[1].includes('+')||d[1].includes('BID')||d[1].includes('SUPPORT')||d[1].includes('MOMENTUM')?'u':d[1].includes('SELL')||d[1].includes('HEADWIND')||d[1].includes('PRESSURE')||d[1].includes('DRAG')?'d':'a'}">${d[1]}</span>`,`${d[2]} · ${d[3]}`]));
-  const setups=m.setups.map(x=>`<div class="scard ${x.ac==='wait'||x.ac==='avoid'?'wait':''}">
+  // Q: if the gate isn't met, do NOT show the ticker at all — omit it, don't flash it.
+  const actionable=m.setups.filter(x=>!(x.invalid) && x.ac!=='avoid' && !(x.gm==='INVALID') && x.cv);
+  const dropped=m.setups.length-actionable.length;
+  const setups=actionable.length? actionable.map(x=>`<div class="scard">
     <div class="stop2"><span class="stk">${x.tk}</span><span class="actbadge ${x.ac}">${x.act}</span><span class="conv">${x.cv?'conv '+x.cv:''}</span></div>
     <div class="est">
       <div class="estc"><div class="ek">Entry</div><div class="ev ${x.e==='—'?'m':'i'}">${x.e}</div></div>
@@ -671,16 +674,18 @@ function viewMarket(id){
       <div class="estc"><div class="ek">Target</div><div class="ev ${x.t==='—'?'m':'u'}">${x.t}</div></div>
       <div class="estc"><div class="ek">R/R</div><div class="ev ${x.rr==='—'?'m':'sg'}">${x.rr}</div></div>
     </div>
-    <div class="styp">${x.ty}<span class="gm ${x.gm==='INVALID'?'d':'m'}">${x.gm}</span></div>
-    ${x.invalid?`<div class="invalidwarn">⚠ ${x.invalid}</div>`:`<div class="swhy">${x.why}</div>`}
-  </div>`).join('');
+    <div class="styp">${x.ty}<span class="gm m">${x.gm==='INVALID'?'':x.gm}</span></div>
+    <div class="swhy">${x.why}</div>
+  </div>`).join('')
+   : `<div class="note">No ticker cleared the validated gate in this market — nothing emitted (by design).</div>`;
+  const droppedNote = dropped>0? `<div class="note" style="margin-top:6px;opacity:.6">${dropped} candidate(s) failed the gate and were omitted (not shown).</div>`:'';
   return `
   <div class="viewhead"><h2>${m.title}</h2><span class="vd">${m.sub}</span>${m.longOnly?'<span class="lo-badge">LONG-ONLY ENFORCED</span>':''}</div>
   <div class="provrow">${m.prov.map(([c,x])=>badge(c,x)).join('')}</div>
   <div class="lbl" style="margin-bottom:7px">Screener funnel — how a ticker surfaces in this market</div>
   <div class="funnel">${fun}</div>
   <div class="grid" style="grid-template-columns:1.15fr 1fr;align-items:start">
-    <div class="panel"><div class="phd"><h3>Setups — surfaced tickers</h3><div class="prov">${badge('eng','◆ entry.py')}${badge('res','◐ synthetic in mock')}</div></div><div class="pbd"><div class="setups">${setups}</div></div></div>
+    <div class="panel"><div class="phd"><h3>Setups — surfaced tickers</h3><div class="prov">${badge('eng','◆ entry.py')}${badge('res','◐ synthetic in mock')}</div></div><div class="pbd"><div class="setups">${setups}</div>${droppedNote}</div></div>
     ${panel('Market Driver Bias',[['eng','◆ market_drivers.py'],['res','◐ your June-26 matrix']],drv)}
   </div>`;
 }
