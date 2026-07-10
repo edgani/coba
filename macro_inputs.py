@@ -5,7 +5,15 @@ import pandas as pd, numpy as np
 
 def _s(x):
     if x is None: return None
-    s = pd.Series(x).dropna()
+    if isinstance(x, pd.DataFrame):
+        for c in ("Close", "close"):
+            if c in x.columns: x = x[c]; break
+        else:
+            x = x.iloc[:, 3] if x.shape[1] > 3 else x.iloc[:, 0]
+    try:
+        s = pd.Series(x).dropna()
+    except Exception:
+        return None
     return s if len(s) >= 10 else None
 
 def _ratio(a, b):

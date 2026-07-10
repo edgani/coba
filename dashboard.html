@@ -251,6 +251,21 @@ function rows(list){ // list: [ [k, v, subhtml?] ]
 }
 
 /* ══════════ MISSION CONTROL (bespoke) ══════════ */
+/* regional regime row — reads window.__REGIONAL (real price-proxy) when live, else honest '—' */
+function regionalCells(){
+  const order=['US','China','Europe','Japan','India','IHSG','Crypto','Commod'];
+  const R=window.__REGIONAL;
+  if(R && Object.keys(R).length){
+    return order.map(k=>{
+      const o=R[k];
+      if(!o) return `<div class="rcell"><div class="rk">${k}</div><div class="rv m">—</div><div class="sub2" style="font-size:8px">no data</div></div>`;
+      return `<div class="rcell"><div class="rk">${k}</div><div class="rv ${o.cls}">${o.label}</div><div class="sub2" style="font-size:8px">${esc2(o.detail)}</div></div>`;
+    }).join('');
+  }
+  // mock fallback (only shown when NOT live)
+  const mock=[['US','Late Expansion','a'],['China','Recovery 31%','i'],['Europe','Weak','d'],['Japan','Bull','u'],['India','Bull','u'],['IHSG','Bull','u'],['Crypto','Expansion','u'],['Commod','Mixed','a']];
+  return mock.map(([k,v,c])=>`<div class="rcell"><div class="rk">${k}</div><div class="rv ${c}">${v}</div></div>`).join('');
+}
 function viewMC(){
   const S = window.__SYS;
   const liveStrip = S ? `<div class="panel" style="margin-bottom:12px;border-color:rgba(46,193,111,.35)"><div class="phd"><h3 style="color:var(--up)">◆ LIVE SYSTEMIC — this run</h3><div class="prov">${badge('eng','◆ gcfis/orchestrator')}${badge('prod','✅ from run.py')}</div></div><div class="pbd"><div class="wsb" style="grid-template-columns:repeat(5,1fr)">
@@ -280,16 +295,9 @@ function viewMC(){
         <div class="wcell"><span class="kx">Dollar</span><span class="vx a">▲ Strong <span class="chip amb" style="margin-left:auto"><span class="dot"></span>=</span></span></div>
         <div class="wcell"><span class="kx">Volatility</span><span class="vx i">→ Neutral <span class="chip neu" style="margin-left:auto"><span class="dot"></span>~</span></span></div>
       </div>`)}
-    ${panel('Regional Regime',[['eng','◆ gip_engine.py'],['eng','◆ country_regime.py'],['prod','✅ quad PROD']],`
+    ${panel('Regional Regime',[['eng','◆ regional_regime.py'],window.__REGIONAL?['prod','● live · price-proxy']:['build','○ mock']],`
       <div class="regions">
-        <div class="rcell"><div class="rk">US</div><div class="rv a">Late Expansion</div></div>
-        <div class="rcell"><div class="rk">China</div><div class="rv i">Recovery 31%</div></div>
-        <div class="rcell"><div class="rk">Europe</div><div class="rv d">Weak</div></div>
-        <div class="rcell"><div class="rk">Japan</div><div class="rv u">Bull</div></div>
-        <div class="rcell"><div class="rk">India</div><div class="rv u">Bull</div></div>
-        <div class="rcell"><div class="rk">IHSG</div><div class="rv u">Bull</div></div>
-        <div class="rcell"><div class="rk">Crypto</div><div class="rv u">Expansion</div></div>
-        <div class="rcell"><div class="rk">Commod</div><div class="rv a">Mixed</div></div>
+        ${regionalCells()}
       </div>`)}
     ${panel('Global Capital Rotation',[['eng','◆ cycle_rotation.py'],['prod','✅ PROD']],`
       <div class="rot">
@@ -695,6 +703,7 @@ function viewMarket(id){
   window.__SYS = D.systemic || null;
   window.__LIVE = !!(D.meta && D.meta.source && D.meta.source!=='SYNTHETIC');
   window.__REGIME_TF = D.regime_tf || null;
+  window.__REGIONAL = D.regional || null;
   // blank any market NOT loaded this run so it never shows stale mock prices
   if(window.__LIVE && D.markets){
     for(const id in MARKET){

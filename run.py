@@ -55,10 +55,18 @@ def _setup_from_ranking(entry, price, direction):
 
 
 def build_desk(data, top_per_market=12):
-    prices, bench = data["prices"], data["bench"]
+    import pandas as _pd
+    def _c1d(x):
+        if isinstance(x, _pd.DataFrame):
+            for c in ("Close", "close", "Adj Close"):
+                if c in x.columns: return x[c]
+            return x.iloc[:, 3] if x.shape[1] > 3 else x.iloc[:, 0]
+        return x
+    prices, bench = data["prices"], _c1d(data["bench"])
     union = {}
     for m in data["markets"]:
-        union.update(prices[m])
+        for _t, _v in (prices.get(m, {}) or {}).items():
+            union[_t] = _c1d(_v)
     if bench is None or not union:
         raise SystemExit("no price data (need bench + universe). On your machine: pip install yfinance.")
 
@@ -69,13 +77,27 @@ def build_desk(data, top_per_market=12):
     try:
         from regime_multitf import multi_timeframe_regime
         _allpx = {}
+        import pandas as _pd
+        def _close(x):
+            if isinstance(x, _pd.DataFrame):
+                for c in ("Close","close"):
+                    if c in x.columns: return x[c]
+                return x.iloc[:, 3] if x.shape[1] > 3 else x.iloc[:, 0]
+            return x
         for _mk in data.get("prices", {}).values():
-            if isinstance(_mk, dict): _allpx.update(_mk)
+            if isinstance(_mk, dict):
+                for _t, _v in _mk.items(): _allpx[_t] = _close(_v)
         if data.get("bench") is not None and "SPY" not in _allpx:
-            _allpx["SPY"] = data["bench"]
+            _allpx["SPY"] = _close(data["bench"])
         _regime_tf = multi_timeframe_regime(data.get("fred"), _allpx)
     except Exception as _e:
         _regime_tf = {"error": str(_e)}
+    # per-region regime from REAL price action (replaces hardcoded "IHSG Bull" mock row)
+    try:
+        from regional_regime import regional_regime
+        _regional = regional_regime({**_allpx, **(data.get("proxies") or {})})
+    except Exception as _e:
+        _regional = {}
     rk = out.get("ranking", {})
     sysm = out.get("systemic", {})
 
@@ -161,6 +183,7 @@ def build_desk(data, top_per_market=12):
         },
         "systemic": systemic,
         "regime_tf": _regime_tf,
+        "regional": _regional,
         "markets": markets,
         "alpha": alpha,
         "desk_picks": out.get("final_desk", {}),

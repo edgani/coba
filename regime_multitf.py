@@ -15,15 +15,22 @@ _NAME = {"Q1": "Goldilocks", "Q2": "Reflation", "Q3": "Stagflation", "Q4": "Defl
 _RISK_ON = {"Q1", "Q2"}
 
 
+def _coerce(x):
+    if isinstance(x, pd.DataFrame):
+        for c in ("Close","close"):
+            if c in x.columns: return x[c]
+        return x.iloc[:, 3] if x.shape[1] > 3 else x.iloc[:, 0]
+    return x
+
 def _ret(s, n):
-    s = pd.Series(s).dropna() if s is not None else None
+    s = pd.Series(_coerce(s)).dropna() if s is not None else None
     if s is None or len(s) <= n: return 0.0
     return float(s.iloc[-1] / s.iloc[-n - 1] - 1)
 
 
 def _pick(prices, *keys):
     for k in keys:
-        v = prices.get(k)
+        v = _coerce(prices.get(k))
         if v is not None and len(pd.Series(v).dropna()) > 5: return v
     return None
 

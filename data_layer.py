@@ -139,7 +139,15 @@ def load_all(markets=None, start="2022-01-01", allow_live=True):
         except Exception:
             pass
 
-    # ---- IHSG/IDX via YOUR idx.co.id feed (typef_idx) ----
+    # ---- country-index proxies for the REGIONAL REGIME row (real, not hardcoded) ----
+    proxies = {}
+    if allow_live:
+        try:
+            from data.loader import load_prices as _lp3
+            from regional_regime import EXTRA_PROXY_TICKERS
+            proxies = _lp3(EXTRA_PROXY_TICKERS) or {}
+        except Exception:
+            proxies = {}
     if "idx" in markets and not prices.get("idx"):
         try:
             from gcfis.feeds.typef_idx import build_typef
@@ -203,7 +211,8 @@ def load_all(markets=None, start="2022-01-01", allow_live=True):
     live = v40_ok or (len(fred) > 5)
     return {"prices": prices, "ohlcv": ohlcv, "bench": bench, "fred": fred, "vix": vix,
             "sources": sources, "bench_source": "v40" if v40_ok else "fallback", "fred_source": fsrc,
-            "overall_source": "LIVE" if live else "SYNTHETIC", "markets": markets, "treasury_liquidity": _liq}
+            "overall_source": "LIVE" if live else "SYNTHETIC", "markets": markets,
+            "treasury_liquidity": _liq, "proxies": proxies}
 
 
 
