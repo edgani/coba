@@ -252,6 +252,22 @@ function rows(list){ // list: [ [k, v, subhtml?] ]
 
 /* ══════════ MISSION CONTROL (bespoke) ══════════ */
 /* regional regime row — reads window.__REGIONAL (real price-proxy) when live, else honest '—' */
+/* grade-gate: a metric renders a NUMBER only if its walk-forward grade is VALIDATED.
+   PARTIAL → banded label; REJECTED/FEED_GATED → "—". No ungraded number can show. */
+function gradeOf(key){ const G=window.__GRADES; return (G&&G[key]&&G[key].grade)||null; }
+function emitGraded(key, value, opts){
+  opts=opts||{}; const g=gradeOf(key);
+  if(g===null) return value;
+  if(g==='VALIDATED') return value;
+  if(g==='PARTIAL')   return opts.band||value;
+  return '—';
+}
+function gradeBadge(key){
+  const g=gradeOf(key); if(!g) return '';
+  const m={VALIDATED:['prod','✅ validated OOS'],PARTIAL:['research','🟡 partial'],
+           REJECTED:['res','❌ rejected OOS'],FEED_GATED:['res','⚫ feed-gated']};
+  const b=m[g]||['res',g]; return `<span class="b ${b[0]}">${b[1]}</span>`;
+}
 function regionalCells(){
   const order=['US','China','Europe','Japan','India','IHSG','Crypto','Commod'];
   const R=window.__REGIONAL;
@@ -569,7 +585,25 @@ document.getElementById('overlay').onclick=e=>{if(e.target.id==='overlay')e.curr
 /* generic tab renderer */
 function viewGeneric(id){
   const t=TABS[id];
-  const panels=t.panels.map(p=>panel(p[0],p[1],p[2])).join('');
+  let panels=t.panels.map(p=>panel(p[0],p[1],p[2])).join('');
+  // Validation tab: prepend the LIVE reproducible walk-forward grade card (overrides stale hardcoded claims)
+  if(id==='rc' && window.__GRADES){
+    const G=window.__GRADES;
+    const nice={crash_pressure:'Crash-pressure (banded)',panic_bottom:'Panic-bottom',factor_momentum:'Factor momentum',
+                dollar_hub:'Dollar-hub coherence',cape_rate:'CAPE→rate',bandarmetrics_markup:'Bandarmetrics markup',
+                accumulation_composite:'Accumulation composite',rotation_momentum:'Rotation-momentum',
+                lead_lag_daily:'Lead-lag (daily)',price_alpha_discovery:'Price-alpha discovery'};
+    const gr=Object.keys(nice).filter(k=>G[k]).map(k=>{
+      const o=G[k], oos=o.oos||{};
+      const ev=Object.entries(oos).slice(0,3).map(([a,b])=>`${a}=${b}`).join(' · ');
+      const cls={VALIDATED:'u',PARTIAL:'a',REJECTED:'d',FEED_GATED:'m'}[o.grade]||'m';
+      return [nice[k], `<span class="${cls}">${o.grade}</span>`, ev||(o.note||'').slice(0,70)];
+    });
+    const live=panel('Walk-Forward Grade Card — LIVE (walkforward_validate.py)',
+                     [['eng','◆ walkforward_validate.py'],['prod','✅ reproducible']],
+                     rows(gr)+`<div class="note" style="margin-top:8px">This card is recomputed from real historical data by <b>walkforward_validate.py</b> (out-of-sample + permutation). Only VALIDATED metrics emit a live number elsewhere; REJECTED/FEED-GATED render "—". Every result is still pending a post-Jan-2026 forward confirmation — the only test memorization cannot fake.</div>`);
+    panels = live + panels;
+  }
   return `<div class="viewhead"><h2 class="${t.cls}">${t.title}</h2><span class="vd">${t.sub}</span></div>
     <div class="provrow">${t.prov.map(([c,x])=>badge(c,x)).join('')}</div>
     <div class="grid" style="grid-template-columns:1fr">${panels}</div>`;
@@ -704,6 +738,7 @@ function viewMarket(id){
   window.__LIVE = !!(D.meta && D.meta.source && D.meta.source!=='SYNTHETIC');
   window.__REGIME_TF = D.regime_tf || null;
   window.__REGIONAL = D.regional || null;
+  window.__GRADES = D.grades || null;
   // flip the header badges so you can SEE the live run took (no more guessing MOCK vs live)
   if(window.__LIVE){
     const vp=document.getElementById('verpill'), tp=document.getElementById('valpill');
