@@ -117,6 +117,8 @@ def load_all(markets=None, start="2022-01-01", allow_live=True):
         try:
             from data.loader import load_prices as _lp, load_ohlcv as _lo
             for m in markets:
+                if m == "idx":
+                    continue  # IHSG handled by typef_idx (idx.co.id) below — authoritative + foreign flow
                 tk = UNI.get(m, UNIVERSE.get(m, []))
                 px = _lp(tk)
                 prices[m] = px
@@ -126,6 +128,35 @@ def load_all(markets=None, start="2022-01-01", allow_live=True):
                 if px: v40_ok = True
         except Exception as e:
             sources["_v40loader"] = f"data.loader failed: {e}"
+    # ---- macro-proxy ETFs (SPY/GLD/USO/UUP/XLI/XLY/TLT) for GIP + regime + cross-asset ----
+    if allow_live:
+        try:
+            from data.loader import load_prices as _lp2
+            _prox = _lp2(["SPY","GLD","USO","UUP","XLI","XLY","TLT","DBC","IWM","SMH"])
+            if _prox:
+                prices["_proxy"] = _prox
+                sources["_proxy"] = f"macro proxies · {len(_prox)}"
+        except Exception:
+            pass
+
+    # ---- IHSG/IDX via YOUR idx.co.id feed (typef_idx) ----
+    if "idx" in markets and not prices.get("idx"):
+        try:
+            from gcfis.feeds.typef_idx import build_typef
+            from warroom import data as _WD
+            idxu = getattr(_WD, "IDX_UNIVERSE", ["BBCA.JK","BMRI.JK","BBRI.JK","BBNI.JK","TLKM.JK","ASII.JK"])
+            idx_ohlcv, idx_status = build_typef(idxu, days=120)
+            if idx_ohlcv:
+                col = lambda df: (df["close"] if "close" in df.columns else df["Close"] if "Close" in df.columns else df.iloc[:, 3])
+                prices["idx"] = {tk: col(df) for tk, df in idx_ohlcv.items()}
+                ohlcv["idx"] = {tk: df.rename(columns=str.capitalize) for tk, df in idx_ohlcv.items()}
+                sources["idx"] = f"typef_idx (idx.co.id) · {len(idx_ohlcv)} names"
+                v40_ok = True
+            else:
+                sources["idx"] = f"typef_idx: {idx_status}"
+        except Exception as e:
+            sources["idx"] = f"typef_idx failed: {e}"
+
     # ---- fallback: warroom.data, then synthetic ----
     if not v40_ok:
         try:
@@ -159,13 +190,20 @@ def load_all(markets=None, start="2022-01-01", allow_live=True):
             v = pd.read_csv(vp); v["DATE"] = pd.to_datetime(v["DATE"]); vix = v.set_index("DATE")["CLOSE"]
     except Exception:
         pass
+    # ---- liquidity read via US Treasury + NY Fed (TGA/RRP/SOFR, no key) ----
+    try:
+        from engines.treasury_liquidity import analyze_liquidity
+        _liq = analyze_liquidity(fred if fred else None)
+    except Exception as e:
+        _liq = {"ok": False, "error": str(e)}
+
     bench = prices.get("us", {}).get(BENCH)
     if bench is None:
         bp, _ = load_prices([BENCH], start, allow_live); bench = bp.get(BENCH)
     live = v40_ok or (len(fred) > 5)
     return {"prices": prices, "ohlcv": ohlcv, "bench": bench, "fred": fred, "vix": vix,
             "sources": sources, "bench_source": "v40" if v40_ok else "fallback", "fred_source": fsrc,
-            "overall_source": "LIVE" if live else "SYNTHETIC", "markets": markets}
+            "overall_source": "LIVE" if live else "SYNTHETIC", "markets": markets, "treasury_liquidity": _liq}
 
 
 

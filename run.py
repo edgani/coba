@@ -71,6 +71,8 @@ def build_desk(data, top_per_market=12):
         _allpx = {}
         for _mk in data.get("prices", {}).values():
             if isinstance(_mk, dict): _allpx.update(_mk)
+        if data.get("bench") is not None and "SPY" not in _allpx:
+            _allpx["SPY"] = data["bench"]
         _regime_tf = multi_timeframe_regime(data.get("fred"), _allpx)
     except Exception as _e:
         _regime_tf = {"error": str(_e)}
@@ -87,7 +89,10 @@ def build_desk(data, top_per_market=12):
     systemic = {
         "quad": fm.get("forward_quad"), "quad_name": fm.get("quad_name"),
         "growth_roc": _num(fm.get("GROC")), "infl_roc": _num(fm.get("IROC")),
-        "liquidity": liq.get("reason") or ("expanding" if liq.get("expanding") else "—"),
+        "liquidity": (lambda _r, _t: ("expanding" if liq.get("expanding")
+                      else (_r if _r and "no " not in _r.lower() else (_t or "—"))))(
+                      liq.get("reason"),
+                      data.get("treasury_liquidity", {}).get("bias") if data.get("treasury_liquidity", {}).get("ok") else None),
         "fragility": _num(fr.get("fragility")) if fr.get("ok") else fr.get("reason"),
         "shock_prob": _num(sh.get("shock_prob")) if sh.get("ok") else sh.get("reason"),
         "cross_asset": xa.get("regime"), "defer_longs": xa.get("defer_longs"),
