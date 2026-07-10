@@ -235,7 +235,13 @@ function tick(){const d=new Date();document.getElementById('clk').textContent=d.
 setInterval(tick,1000);tick();
 
 /* helper builders */
-const badge=(cls,txt)=>`<span class="b ${cls}">${txt}</span>`;
+const badge=(cls,txt)=>{
+  if(window.__LIVE){
+    if(/needs FRED|⚠ FRED/i.test(txt)) return '';                       // FRED is live this run
+    if(/synthetic in mock/i.test(txt)) return `<span class="b prod">● live</span>`;
+  }
+  return `<span class="b ${cls}">${txt}</span>`;
+};
 const esc2=s=>String(s==null?'—':s).replace(/</g,'&lt;').replace(/>/g,'&gt;');
 function panel(title, provs, bodyHTML){
   return `<div class="panel"><div class="phd"><h3>${title}</h3><div class="prov">${provs.map(([c,t])=>badge(c,t)).join('')}</div></div><div class="pbd">${bodyHTML}</div></div>`;
@@ -254,11 +260,17 @@ function viewMC(){
     <div class="wcell"><span class="kx">Shock P</span><span class="vx ${typeof S.shock_prob==='number'&&S.shock_prob>0.5?'d':'m'}">${esc2(S.shock_prob)}</span></div>
     <div class="wcell"><span class="kx">Cross-asset</span><span class="vx i">${esc2(S.cross_asset)}</span></div>
   </div>${(S.rotation_in&&S.rotation_in.length)?`<div class="lbl" style="margin-top:9px">Rotating IN: <span class="u">${S.rotation_in.join(', ')}</span> · OUT: <span class="d">${(S.rotation_out||[]).join(', ')}</span></div>`:''}</div></div>` : '';
+  const R = window.__REGIME_TF;
+  const qcol=q=>({Q1:'u',Q2:'u',Q3:'d',Q4:'d'}[q]||'m');
+  const tfcell=(lbl,o)=> o ? `<div class="wcell"><span class="kx">${lbl}</span><span class="vx ${qcol(o.quad)}">${o.quad} · ${esc2(o.name)}</span>${o.conf!=null?`<span class="sub2">conf ${o.conf}</span>`:(o.g!=null?`<span class="sub2">g ${o.g} · i ${o.i}</span>`:'')}</div>` : `<div class="wcell"><span class="kx">${lbl}</span><span class="vx m">—</span></div>`;
+  const regimeStrip = R ? `<div class="panel" style="margin-bottom:12px;border-color:rgba(122,162,255,.30)"><div class="phd"><h3 style="color:var(--ac)">◆ MULTI-TIMEFRAME REGIME</h3><div class="prov">${badge('eng','◆ gip_engine.py')}${badge('prod','✅ structural+monthly')}${badge('build','○ weekly/daily = price-proxy')}</div></div><div class="pbd"><div class="wsb" style="grid-template-columns:repeat(4,1fr)">
+    ${tfcell('Structural',R.structural)}${tfcell('Monthly',R.monthly)}${tfcell('Weekly',R.weekly)}${tfcell('Daily',R.daily)}
+  </div><div class="lbl" style="margin-top:9px">Posture: <span class="${/AGGRESSIVE/.test(R.posture||'')?'u':/DEFENSIVE/.test(R.posture||'')?'d':'a'}">${esc2(R.posture)}</span>${R.aligned?' · <span class="u">aligned</span>':' · <span class="a">divergent → flexibility on tickers &amp; lean</span>'}</div></div></div>` : '';
   return `
   <div class="viewhead"><h2 class="sg">MISSION CONTROL</h2><span class="vd">Cockpit — what the world is doing, now. &lt;30s scan.</span></div>
   <div class="provrow">${badge('eng','◆ warroom/attention.py')}${badge('eng','◆ meters.py')}${badge('eng','◆ drivers.py')}${badge('prod','✅ meters/drivers PROD')}${badge('build','○ status-bar wiring')}</div>
   ${liveStrip}
-  <div class="grid" style="grid-template-columns:1fr">
+  ${regimeStrip}  <div class="grid" style="grid-template-columns:1fr">
     ${panel('World Status — Macro Drivers',[['eng','◆ drivers.py'],['prod','✅ PROD']],`
       <div class="wsb">
         <div class="wcell"><span class="kx">Liquidity</span><span class="vx u">▲ Improving <span class="chip up" style="margin-left:auto"><span class="dot"></span>+</span></span></div>
@@ -681,6 +693,16 @@ function viewMarket(id){
   }
   // Mission Control live-macro override (quad / liquidity / fragility / shock / x-asset)
   window.__SYS = D.systemic || null;
+  window.__LIVE = !!(D.meta && D.meta.source && D.meta.source!=='SYNTHETIC');
+  window.__REGIME_TF = D.regime_tf || null;
+  // blank any market NOT loaded this run so it never shows stale mock prices
+  if(window.__LIVE && D.markets){
+    for(const id in MARKET){
+      if(D.markets[id]) continue;
+      MARKET[id].setups=[{tk:'—',act:'NOT LOADED',ac:'wait',e:'—',s:'—',t:'—',rr:'—',ty:'—',gm:'—',cv:0,
+        why:'',invalid:'market not fetched this run — add it in the sidebar or check the feed'}];
+    }
+  }
 })();
 
 /* router */

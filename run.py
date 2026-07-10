@@ -65,6 +65,15 @@ def build_desk(data, top_per_market=12):
     from macro_inputs import assemble
     macro_in = assemble(data.get("fred"), union, bench, data.get("vix"))
     out = run_gcfis(union, bench, regime_posterior={"chop": 1.0}, **macro_in)
+    # multi-timeframe regime (structural/monthly/weekly/daily + posture)
+    try:
+        from regime_multitf import multi_timeframe_regime
+        _allpx = {}
+        for _mk in data.get("prices", {}).values():
+            if isinstance(_mk, dict): _allpx.update(_mk)
+        _regime_tf = multi_timeframe_regime(data.get("fred"), _allpx)
+    except Exception as _e:
+        _regime_tf = {"error": str(_e)}
     rk = out.get("ranking", {})
     sysm = out.get("systemic", {})
 
@@ -146,6 +155,7 @@ def build_desk(data, top_per_market=12):
             "note": disc["summary"].get("note", ""),
         },
         "systemic": systemic,
+        "regime_tf": _regime_tf,
         "markets": markets,
         "alpha": alpha,
         "desk_picks": out.get("final_desk", {}),
