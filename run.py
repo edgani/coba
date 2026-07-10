@@ -54,6 +54,18 @@ def _setup_from_ranking(entry, price, direction):
     }
 
 
+
+def _load_grades():
+    """The walk-forward grade card (metric_grades.json). The UI emits a metric as a number only
+    when its grade is VALIDATED; PARTIAL emits banded; REJECTED/FEED_GATED emit '—'. Regenerate
+    with: python walkforward_validate.py"""
+    import os, json
+    p = os.path.join(os.path.dirname(os.path.abspath(__file__)), "metric_grades.json")
+    try:
+        with open(p) as f: return json.load(f)
+    except Exception:
+        return {}
+
 def build_desk(data, top_per_market=12):
     import pandas as _pd
     def _c1d(x):
@@ -187,6 +199,7 @@ def build_desk(data, top_per_market=12):
         "systemic": systemic,
         "regime_tf": _regime_tf,
         "regional": _regional,
+        "grades": _load_grades(),
         "markets": markets,
         "alpha": alpha,
         "desk_picks": out.get("final_desk", {}),
