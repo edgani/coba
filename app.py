@@ -21,7 +21,7 @@ binance = ccxt.binance()
 # ==========================================
 # 2. DYNAMIC ASSET UNIVERSE (TOP 100 CRYPTO)
 # ==========================================
-@st.cache_data(ttl=3600) # Cache 1 jam biar gak spam API Binance
+@st.cache_data(ttl=3600)
 def get_top_crypto(limit=100):
     try:
         tickers = binance.fetch_tickers()
@@ -36,15 +36,8 @@ def get_top_crypto(limit=100):
     except:
         return ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT']
 
-# Daftar Forex & Commodities yang udah di-filter
 FOREX_COMMODITIES = [
-    'GC=F',   # XAUUSD (Gold)
-    'SI=F',   # XAGUSD (Silver)
-    'CL=F',   # USOIL (Crude Oil WTI)
-    'USDJPY=X', # USDJPY
-    'EURUSD=X', # EURUSD
-    'GBPUSD=X', # GBPUSD
-    'GBPJPY=X'  # GBPJPY
+    'GC=F', 'SI=F', 'CL=F', 'USDJPY=X', 'EURUSD=X', 'GBPUSD=X', 'GBPJPY=X'
 ]
 
 ASSET_UNIVERSE = {
@@ -53,8 +46,9 @@ ASSET_UNIVERSE = {
 }
 
 # ==========================================
-# 3. DATA FETCHING ENGINES (FORCE LATEST)
+# 3. DATA FETCHING ENGINES (CACHED & SAFE)
 # ==========================================
+@st.cache_data(ttl=300, show_spinner=False) # Cache 5 menit biar gak kena rate limit
 def fetch_binance_data(symbol, days=120):
     try:
         since = binance.milliseconds() - (days * 24 * 60 * 60 * 1000)
@@ -67,12 +61,11 @@ def fetch_binance_data(symbol, days=120):
     except:
         return None
 
+@st.cache_data(ttl=300, show_spinner=False)
 def fetch_yahoo_data(symbol, days=120):
     try:
-        # FORCE LATEST DATA: Pakai start dan end eksplisit sampai hari ini
         end_date = datetime.today() + timedelta(days=1)
         start_date = end_date - timedelta(days=days)
-        
         df = yf.download(symbol, start=start_date, end=end_date, interval='1d', progress=False, auto_adjust=True)
         if df.empty: return None
         if isinstance(df.columns, pd.MultiIndex):
@@ -82,30 +75,34 @@ def fetch_yahoo_data(symbol, days=120):
         return None
 
 # ==========================================
-# 4. MACRO LOGIC GATE (MODUL C SIMULASI)
+# 4. MACRO LOGIC GATE
 # ==========================================
 def check_macro_gate(symbol, current_price, df):
-    if df.empty: return False
+    try:
+        if df.empty: return False
+            
+        if '/USDT' in symbol:
+            if len(df) > 90: high_90d = df['High'].rolling(90).max().iloc[-1]
+            else: high_90d = df['High'].max()
+        else:
+            if len(df) > 90: high_90d = df['High'].rolling(90).max().iloc[-1]
+            else: high_90d = df['High'].max()
+                
+        if pd.isna(high_90d) or high_90d == 0: return False
         
-    if '/USDT' in symbol:
-        if len(df) > 90:
-            high_90d = df['High'].rolling(90).max().iloc[-1]
+        # Paksa float untuk hindari error tipe data
+        current_price = float(current_price)
+        high_90d = float(high_90d)
+        
+        if '/USDT' in symbol:
+            return current_price < (high_90d * 0.60)
         else:
-            high_90d = df['High'].max()
-            
-        if pd.isna(high_90d) or high_90d == 0: return False
-        return current_price < (high_90d * 0.60)
-    else:
-        if len(df) > 90:
-            high_90d = df['High'].rolling(90).max().iloc[-1]
-        else:
-            high_90d = df['High'].max()
-            
-        if pd.isna(high_90d) or high_90d == 0: return False
-        return current_price < (high_90d * 0.85)
+            return current_price < (high_90d * 0.85)
+    except:
+        return False
 
 # ==========================================
-# 5. SCANNER LOGIC (SAFE WRAPPER)
+# 5. SCANNER LOGIC (BULLETPROOF WRAPPER)
 # ==========================================
 def scan_asset(ticker, market_type, anchor_window, front_run_pct, min_front_runs, lookback_days):
     days_to_fetch = anchor_window + lookback_days + 20
@@ -122,50 +119,55 @@ def scan_asset(ticker, market_type, anchor_window, front_run_pct, min_front_runs
     
     if 'Low' not in df.columns or 'Close' not in df.columns: return None
         
-    anchor_low = df['Low'].iloc[-(anchor_window+1):-1].min()
-    if pd.isna(anchor_low) or anchor_low == 0: return None
+    try:
+        anchor_low = float(df['Low'].iloc[-(anchor_window+1):-1].min())
+        if pd.isna(anchor_low) or anchor_low == 0: return None
+            
+        lower_bound = anchor_low * 0.995
+        upper_bound = anchor_low * (1 + (front_run_pct / 100))
         
-    lower_bound = anchor_low * 0.995
-    upper_bound = anchor_low * (1 + (front_run_pct / 100))
-    
-    df['Is_Front_Run'] = ((df['Low'] <= upper_bound) & 
-                          (df['Low'] >= lower_bound) & 
-                          (df['Close'] > anchor_low))
-    
-    front_run_count = df['Is_Front_Run'].iloc[-lookback_days:].sum()
-    
-    last_row = df.iloc[-1]
-    last_low = last_row['Low']
-    last_close = last_row['Close']
-    
-    if pd.isna(last_low) or pd.isna(last_close): return None
-    
-    scam_wick_reclaim = (last_low < anchor_low) and (last_close > anchor_low)
-    incubation = (last_low <= upper_bound) and (last_close > anchor_low) and not scam_wick_reclaim
-    
-    macro_valid = True
-    if use_macro_gate:
-        macro_valid = check_macro_gate(ticker, last_close, df)
+        df['Is_Front_Run'] = ((df['Low'].astype(float) <= upper_bound) & 
+                              (df['Low'].astype(float) >= lower_bound) & 
+                              (df['Close'].astype(float) > anchor_low))
         
-    status = 'NEUTRAL'
-    if scam_wick_reclaim and front_run_count >= min_front_runs:
-        status = '🚀 TRIGGERED' if macro_valid else '🚀 TRIGGERED (Macro OFF)'
-    elif incubation and front_run_count >= (min_front_runs - 1):
-        status = '⏳ INCUBATION' if macro_valid else '⏳ INCUBATION (Macro OFF)'
-    elif front_run_count >= (min_front_runs - 2):
-        status = '👀 WATCHING'
+        front_run_count = int(df['Is_Front_Run'].iloc[-lookback_days:].sum())
         
-    if status != 'NEUTRAL':
-        return {
-            'Ticker': ticker,
-            'Market': market_type.split(' ')[0],
-            'Status': status,
-            'Anchor Price': round(float(anchor_low), 6),
-            'Front-Runs': int(front_run_count),
-            'Last Close': round(float(last_close), 6),
-            'Distance (%)': round(float(((last_close - anchor_low) / anchor_low) * 100), 2),
-            'Macro Valid': '✅' if macro_valid else '❌'
-        }
+        last_row = df.iloc[-1]
+        last_low = float(last_row['Low'])
+        last_close = float(last_row['Close'])
+        
+        if pd.isna(last_low) or pd.isna(last_close): return None
+        
+        scam_wick_reclaim = (last_low < anchor_low) and (last_close > anchor_low)
+        incubation = (last_low <= upper_bound) and (last_close > anchor_low) and not scam_wick_reclaim
+        
+        macro_valid = True
+        if use_macro_gate:
+            macro_valid = check_macro_gate(ticker, last_close, df)
+            
+        status = 'NEUTRAL'
+        if scam_wick_reclaim and front_run_count >= min_front_runs:
+            status = '🚀 TRIGGERED' if macro_valid else '🚀 TRIGGERED (Macro OFF)'
+        elif incubation and front_run_count >= (min_front_runs - 1):
+            status = '⏳ INCUBATION' if macro_valid else '⏳ INCUBATION (Macro OFF)'
+        elif front_run_count >= (min_front_runs - 2):
+            status = '👀 WATCHING'
+            
+        if status != 'NEUTRAL':
+            return {
+                'Ticker': ticker,
+                'Market': market_type.split(' ')[0],
+                'Status': status,
+                'Anchor Price': round(anchor_low, 6),
+                'Front-Runs': front_run_count,
+                'Last Close': round(last_close, 6),
+                'Distance (%)': round(((last_close - anchor_low) / anchor_low) * 100, 2),
+                'Macro Valid': '✅' if macro_valid else '❌'
+            }
+    except Exception:
+        # Kalau ada error math/data, skip ticker ini
+        return None
+        
     return None
 
 # ==========================================
@@ -183,7 +185,6 @@ selected_markets = st.sidebar.multiselect(
 )
 
 use_macro_gate = st.sidebar.checkbox("Aktifkan Macro Gate (Bear Market Filter)", value=True)
-st.sidebar.caption("Crypto: Koreksi > 40% dari ATH 90 hari. Forex/Comm: Koreksi > 15%.")
 
 st.sidebar.subheader("Parameter Setup")
 anchor_window = st.sidebar.slider("Anchor Window (Hari)", 20, 100, 50, step=5)
@@ -192,7 +193,6 @@ front_run_pct = st.sidebar.slider("Jarak Front-Run dari Anchor (%)", 0.5, 5.0, 1
 lookback_days = st.sidebar.slider("Lookback Window (Hari)", 10, 60, 30, step=5)
 
 custom_tickers = st.sidebar.text_input("Tambah ticker manual (Pisahkan dengan koma)", "")
-st.sidebar.caption("Crypto: pakai format SOL/USDT. Forex: GBPUSD=X")
 
 # ==========================================
 # 7. EXECUTION & DATA PROCESSING
@@ -221,10 +221,9 @@ if st.sidebar.button("Start Scanning", type="primary", use_container_width=True)
     if not tickers_to_scan:
         st.warning("Silakan pilih minimal 1 market atau input ticker manual.")
     else:
-        # TANGGAL & JAM REAL-TIME SAAT SCAN DIJALANKAN
         scan_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         st.write(f"### Memindai {len(tickers_to_scan)} aset...")
-        st.caption(f"⏱️ Scan executed at: {scan_time} | Data diambil real-time dari API Binance & Yahoo Finance.")
+        st.caption(f"⏱️ Scan executed at: {scan_time} | Data diambil real-time dari API.")
         
         progress_bar = st.progress(0)
         status_text = st.empty()
@@ -244,7 +243,8 @@ if st.sidebar.button("Start Scanning", type="primary", use_container_width=True)
                 error_count += 1
                 
             progress_bar.progress((i + 1) / len(tickers_to_scan))
-            time.sleep(0.02) # Rate limit handler
+            # Jeda 0.05 detik untuk memastikan gak nembus rate limit API
+            time.sleep(0.05) 
             
         progress_bar.empty()
         status_text.empty()
