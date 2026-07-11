@@ -15,90 +15,119 @@ st.set_page_config(
     layout="wide"
 )
 
-# ==========================================
-# 2. ASSET UNIVERSE & DATA FEEDS
-# ==========================================
-ASSET_UNIVERSE = {
-    'Crypto (Binance)': ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'LINK/USDT', 'DOGE/USDT', 'AVAX/USDT', 'MATIC/USDT'],
-    'US Stocks (Yahoo)': ['AAPL', 'TSLA', 'NVDA', 'AMZN', 'META', 'MSFT', 'AMD'],
-    'Forex (Yahoo)': ['EURUSD=X', 'GBPUSD=X', 'USDJPY=X', 'AUDUSD=X'],
-    'Commodities (Yahoo)': ['GC=F', 'CL=F', 'SI=F'] 
-}
-
 # Inisialisasi Binance via CCXT
 binance = ccxt.binance()
 
 # ==========================================
+# 2. DYNAMIC ASSET UNIVERSE (TOP 100 CRYPTO)
+# ==========================================
+@st.cache_data(ttl=3600) # Cache 1 jam biar gak spam API Binance
+def get_top_crypto(limit=100):
+    try:
+        # Fetch semua ticker di Binance
+        tickers = binance.fetch_tickers()
+        # Filter hanya pair USDT dan bukan leveraged token (UP/DOWN/BULL/BEAR)
+        usdt_pairs = {
+            symbol: data.get('quoteVolume', 0) 
+            for symbol, data in tickers.items() 
+            if symbol.endswith('/USDT') and 'UP/USDT' not in symbol and 'DOWN/USDT' not in symbol 
+            and 'BULL/USDT' not in symbol and 'BEAR/USDT' not in symbol
+        }
+        # Urutkan berdasarkan volume terbesar, ambil top 'limit'
+        top_symbols = sorted(usdt_pairs, key=usdt_pairs.get, reverse=True)[:limit]
+        return top_symbols
+    except:
+        # Fallback kalau API Binance sibuk
+        return ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT']
+
+# Daftar Forex & Commodities yang udah di-filter
+FOREX_COMMODITIES = [
+    'GC=F',   # XAUUSD (Gold)
+    'SI=F',   # XAGUSD (Silver)
+    'CL=F',   # USOIL (Crude Oil WTI)
+    'USDJPY=X', # USDJPY
+    'EURUSD=X', # EURUSD
+    'GBPUSD=X', # GBPUSD
+    'GBPJPY=X'  # GBPJPY
+]
+
+ASSET_UNIVERSE = {
+    'Crypto Top 100 (Binance)': get_top_crypto(100),
+    'Forex & Commodities (Yahoo)': FOREX_COMMODITIES
+}
+
+# ==========================================
 # 3. DATA FETCHING ENGINES
 # ==========================================
-def fetch_binance_data(symbol, days=90):
-    """Fetch real-time OHLCV from Binance"""
+def fetch_binance_data(symbol, days=120):
     try:
         since = binance.milliseconds() - (days * 24 * 60 * 60 * 1000)
         ohlcv = binance.fetch_ohlcv(symbol, '1d', since)
-        
+        if not ohlcv: return None
         df = pd.DataFrame(ohlcv, columns=['Timestamp', 'Open', 'High', 'Low', 'Close', 'Volume'])
         df['Timestamp'] = pd.to_datetime(df['Timestamp'], unit='ms')
         df.set_index('Timestamp', inplace=True)
         return df
-    except Exception as e:
+    except:
         return None
 
-def fetch_yahoo_data(symbol, days=90):
-    """Fetch OHLCV from Yahoo Finance"""
+def fetch_yahoo_data(symbol, days=120):
     try:
-        df = yf.download(symbol, period=f"{days}d", interval='1d', progress=False)
+        df = yf.download(symbol, period=f"{days}d", interval='1d', progress=False, auto_adjust=True)
+        if df.empty: return None
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
         return df
-    except Exception as e:
+    except:
         return None
 
 # ==========================================
 # 4. MACRO LOGIC GATE (MODUL C SIMULASI)
 # ==========================================
 def check_macro_gate(symbol, current_price, df):
-    """
-    Simulasi Modul C: On-Chain Macro Validation.
-    Di live trading, fungsi ini nge-fetch API CryptoQuant (NUPL, SOPR, dll).
-    Untuk prototype ini, kita pakai proxy: Harga turun > 40% dari ATH 1 tahun = Bear Market.
-    """
-    # Jika bukan crypto, macro gate dinonaktifkan (Return True)
-    if '/USDT' not in symbol and '-' not in symbol and '=' not in symbol:
-        # Untuk saham, kita cek apakah sedang koreksi > 20% dari high 1 tahun
-        high_1y = df['High'].rolling(252).max().iloc[-1] if len(df) > 252 else df['High'].max()
-        if current_price < (high_1y * 0.80):
-            return True # Bear market saam
-        return False
+    if df.empty: return False
+        
+    # Jika Crypto (Binance), cek koreksi > 40% dari ATH 90 hari
+    if '/USDT' in symbol:
+        if len(df) > 90:
+            high_90d = df['High'].rolling(90).max().iloc[-1]
+        else:
+            high_90d = df['High'].max()
+            
+        if pd.isna(high_90d) or high_90d == 0: return False
+        return current_price < (high_90d * 0.60)
     
-    # Proxy Crypto: Koreksi > 40% dari High 90 hari (Simulasi Bear/Capitulation)
-    high_90d = df['High'].rolling(90).max().iloc[-1] if len(df) > 90 else df['High'].max()
-    if current_price < (high_90d * 0.60):
-        return True # Simulasi NUPL Extreme Fear / SOPR < 1
-    return False
+    # Jika Forex/Commodities, cek koreksi > 15% dari ATH 90 hari (Volatilitas forex lebih rendah)
+    else:
+        if len(df) > 90:
+            high_90d = df['High'].rolling(90).max().iloc[-1]
+        else:
+            high_90d = df['High'].max()
+            
+        if pd.isna(high_90d) or high_90d == 0: return False
+        return current_price < (high_90d * 0.85)
 
 # ==========================================
-# 5. SCANNER LOGIC (VECTORIZED)
+# 5. SCANNER LOGIC (SAFE WRAPPER)
 # ==========================================
 def scan_asset(ticker, market_type, anchor_window, front_run_pct, min_front_runs, lookback_days):
-    
     days_to_fetch = anchor_window + lookback_days + 20
     
-    # 1. Fetch Data
     if 'Binance' in market_type:
         df = fetch_binance_data(ticker, days_to_fetch)
     else:
         df = fetch_yahoo_data(ticker, days_to_fetch)
         
-    if df is None or len(df) < anchor_window + 10:
-        return None
+    if df is None or len(df) < anchor_window + 10: return None
         
     df.dropna(inplace=True)
+    if df.empty: return None
     
-    # 2. Cari Anchor (Swing Low absolut dari window tertentu, skip hari ini)
-    anchor_low = df['Low'].iloc[-(anchor_window+1):-1].min()
-    if pd.isna(anchor_low) or anchor_low == 0:
-        return None
+    if 'Low' not in df.columns or 'Close' not in df.columns: return None
         
-    # 3. Hitung Front-Run
+    anchor_low = df['Low'].iloc[-(anchor_window+1):-1].min()
+    if pd.isna(anchor_low) or anchor_low == 0: return None
+        
     lower_bound = anchor_low * 0.995
     upper_bound = anchor_low * (1 + (front_run_pct / 100))
     
@@ -108,22 +137,24 @@ def scan_asset(ticker, market_type, anchor_window, front_run_pct, min_front_runs
     
     front_run_count = df['Is_Front_Run'].iloc[-lookback_days:].sum()
     
-    # 4. Deteksi Scam Wick & Incubation
     last_row = df.iloc[-1]
-    scam_wick_reclaim = (last_row['Low'] < anchor_low) and (last_row['Close'] > anchor_low)
-    incubation = (last_row['Low'] <= upper_bound) and (last_row['Close'] > anchor_low) and not scam_wick_reclaim
+    last_low = last_row['Low']
+    last_close = last_row['Close']
     
-    # 5. Cek Macro Gate (Hanya aktif jika dicentang di UI)
+    if pd.isna(last_low) or pd.isna(last_close): return None
+    
+    scam_wick_reclaim = (last_low < anchor_low) and (last_close > anchor_low)
+    incubation = (last_low <= upper_bound) and (last_close > anchor_low) and not scam_wick_reclaim
+    
     macro_valid = True
     if use_macro_gate:
-        macro_valid = check_macro_gate(ticker, last_row['Close'], df)
+        macro_valid = check_macro_gate(ticker, last_close, df)
         
-    # 6. Status Determination
     status = 'NEUTRAL'
     if scam_wick_reclaim and front_run_count >= min_front_runs:
-        status = '🚀 TRIGGERED' if macro_valid else '🚀 TRIGGERED (Macro Gate OFF)'
+        status = '🚀 TRIGGERED' if macro_valid else '🚀 TRIGGERED (Macro OFF)'
     elif incubation and front_run_count >= (min_front_runs - 1):
-        status = '⏳ INCUBATION' if macro_valid else '⏳ INCUBATION (Macro Gate OFF)'
+        status = '⏳ INCUBATION' if macro_valid else '⏳ INCUBATION (Macro OFF)'
     elif front_run_count >= (min_front_runs - 2):
         status = '👀 WATCHING'
         
@@ -132,39 +163,39 @@ def scan_asset(ticker, market_type, anchor_window, front_run_pct, min_front_runs
             'Ticker': ticker,
             'Market': market_type.split(' ')[0],
             'Status': status,
-            'Anchor Price': round(anchor_low, 4),
+            'Anchor Price': round(float(anchor_low), 6), # 6 desimal buat ada altcoin harga 0.0001
             'Front-Runs': int(front_run_count),
-            'Last Close': round(last_row['Close'], 4),
-            'Distance to Anchor (%)': round(((last_row['Close'] - anchor_low) / anchor_low) * 100, 2),
+            'Last Close': round(float(last_close), 6),
+            'Distance (%)': round(float(((last_close - anchor_low) / anchor_low) * 100), 2),
             'Macro Valid': '✅' if macro_valid else '❌'
         }
+    return None
 
 # ==========================================
 # 6. STREAMLIT UI LAYOUT
 # ==========================================
 st.title("🚀 KillaXBT Institutional Scanner")
-st.markdown("Mencari pola **Liquidity Sweep & Front-Running** (Binance Real-time & Yahoo Finance).")
+st.markdown("Mencari pola **Liquidity Sweep & Front-Running** (Top 100 Crypto Dynamic + Forex/Commodities).")
 
-# Sidebar
 st.sidebar.header("⚙️ Scanner Configuration")
 
 selected_markets = st.sidebar.multiselect(
     "Pilih Market:",
     options=list(ASSET_UNIVERSE.keys()),
-    default=['Crypto (Binance)']
+    default=['Crypto Top 100 (Binance)']
 )
 
-use_macro_gate = st.sidebar.checkbox("Aktifkan Macro Gate (On-Chain Simulation)", value=True)
-st.sidebar.caption("Jika aktif, sistem hanya akan menampilkan setup TRIGGERED/INCUBATION jika aset sedang dalam fase Bear/Capitulation (Koreksi > 40% dari ATH).")
+use_macro_gate = st.sidebar.checkbox("Aktifkan Macro Gate (Bear Market Filter)", value=True)
+st.sidebar.caption("Crypto: Koreksi > 40% dari ATH 90 hari. Forex/Comm: Koreksi > 15%.")
 
 st.sidebar.subheader("Parameter Setup")
-anchor_window = st.sidebar.slider("Anchor Window (Hari)", min_value=20, max_value=100, value=50, step=5)
-min_front_runs = st.sidebar.slider("Minimal Front-Run Count", min_value=3, max_value=8, value=5, step=1)
-front_run_pct = st.sidebar.slider("Jarak Front-Run dari Anchor (%)", min_value=0.5, max_value=5.0, value=1.5, step=0.1)
-lookback_days = st.sidebar.slider("Lookback Window (Hari)", min_value=10, max_value=60, value=30, step=5)
+anchor_window = st.sidebar.slider("Anchor Window (Hari)", 20, 100, 50, step=5)
+min_front_runs = st.sidebar.slider("Minimal Front-Run Count", 3, 8, 5, step=1)
+front_run_pct = st.sidebar.slider("Jarak Front-Run dari Anchor (%)", 0.5, 5.0, 1.5, step=0.1)
+lookback_days = st.sidebar.slider("Lookback Window (Hari)", 10, 60, 30, step=5)
 
 custom_tickers = st.sidebar.text_input("Tambah ticker manual (Pisahkan dengan koma)", "")
-st.sidebar.caption("Crypto: pakai format BTC/USDT. Saham: AAPL. Forex: EURUSD=X")
+st.sidebar.caption("Crypto: pakai format SOL/USDT. Forex: GBPUSD=X")
 
 # ==========================================
 # 7. EXECUTION & DATA PROCESSING
@@ -183,11 +214,10 @@ if st.sidebar.button("Start Scanning", type="primary", use_container_width=True)
         custom_list = [t.strip() for t in custom_tickers.split(',')]
         for t in custom_list:
             tickers_to_scan.append(t)
-            # Asumsi custom ticker adalah crypto jika ada /USDT, selain itu Yahoo
             if '/USDT' in t or '-USD' in t:
                 market_map[t] = 'Crypto (Binance)' if '/USDT' in t else 'Crypto (Yahoo)'
             else:
-                market_map[t] = 'US Stocks (Yahoo)'
+                market_map[t] = 'Forex & Commodities (Yahoo)'
                 
     tickers_to_scan = list(set(tickers_to_scan))
     
@@ -195,22 +225,27 @@ if st.sidebar.button("Start Scanning", type="primary", use_container_width=True)
         st.warning("Silakan pilih minimal 1 market atau input ticker manual.")
     else:
         st.write(f"### Memindai {len(tickers_to_scan)} aset...")
+        st.caption("Tunggu sebentar, fetch data 100+ aset memakan waktu sekitar 1-2 menit.")
         
         progress_bar = st.progress(0)
         status_text = st.empty()
         
         results = []
+        error_count = 0
         
         for i, ticker in enumerate(tickers_to_scan):
             market_type = market_map.get(ticker, "Unknown")
             status_text.text(f"Scanning {ticker} via {market_type}... ({i+1}/{len(tickers_to_scan)})")
             
-            res = scan_asset(ticker, market_type, anchor_window, front_run_pct, min_front_runs, lookback_days)
-            if res:
-                results.append(res)
+            try:
+                res = scan_asset(ticker, market_type, anchor_window, front_run_pct, min_front_runs, lookback_days)
+                if res:
+                    results.append(res)
+            except Exception:
+                error_count += 1
                 
             progress_bar.progress((i + 1) / len(tickers_to_scan))
-            time.sleep(0.05) # Hindari rate limit
+            time.sleep(0.02) # Rate limit handler
             
         progress_bar.empty()
         status_text.empty()
@@ -220,24 +255,23 @@ if st.sidebar.button("Start Scanning", type="primary", use_container_width=True)
         # ==========================================
         if not results:
             st.info("Tidak ada setup yang terbentuk saat ini. Coba ubah parameter atau market.")
+            if error_count > 0:
+                st.warning(f"Catatan: {error_count} ticker dilewati karena error koneksi data.")
         else:
             df_results = pd.DataFrame(results)
             
-            # Urutkan
-            status_order = {'🚀 TRIGGERED': 1, '🚀 TRIGGERED (Macro Gate OFF)': 1, '⏳ INCUBATION': 2, '⏳ INCUBATION (Macro Gate OFF)': 2, '👀 WATCHING': 3}
+            status_order = {'🚀 TRIGGERED': 1, '🚀 TRIGGERED (Macro OFF)': 1, '⏳ INCUBATION': 2, '⏳ INCUBATION (Macro OFF)': 2, '👀 WATCHING': 3}
             df_results['Sort_Order'] = df_results['Status'].map(status_order)
             df_results = df_results.sort_values(['Sort_Order', 'Macro Valid'], ascending=[True, False]).drop('Sort_Order', axis=1).reset_index(drop=True)
             
-            st.success(f"Ditemukan {len(df_results)} potensi setup!")
+            st.success(f"Ditemukan {len(df_results)} potensi setup dari {len(tickers_to_scan)} aset!")
+            if error_count > 0:
+                st.caption(f"⚠️ {error_count} ticker dilewati karena error data API.")
             
-            # Styling
             def highlight_status(val):
-                if 'TRIGGERED' in val:
-                    return 'background-color: #ff4b4b; color: white; font-weight: bold'
-                elif 'INCUBATION' in val:
-                    return 'background-color: #ffa621; color: black'
-                elif 'WATCHING' in val:
-                    return 'background-color: #21b353; color: white'
+                if 'TRIGGERED' in val: return 'background-color: #ff4b4b; color: white; font-weight: bold'
+                elif 'INCUBATION' in val: return 'background-color: #ffa621; color: black'
+                elif 'WATCHING' in val: return 'background-color: #21b353; color: white'
                 return ''
                 
             st.dataframe(
@@ -246,7 +280,6 @@ if st.sidebar.button("Start Scanning", type="primary", use_container_width=True)
                 hide_index=True
             )
             
-            # Execution Insights
             st.divider()
             st.subheader("📖 Execution Insights")
             
@@ -261,11 +294,3 @@ if st.sidebar.button("Start Scanning", type="primary", use_container_width=True)
                 
 else:
     st.info("👈 Atur parameter di sidebar dan klik **Start Scanning** untuk memulai.")
-    
-    with st.expander("ℹ️ Tentang Sistem"):
-        st.markdown("""
-        **KillaXBT Scanner V2** menggabungkan 3 modul utama:
-        1. **Data Feed:** Crypto diambil real-time dari Binance API. Saham/Forex dari Yahoo Finance.
-        2. **Price Action:** Mendeteksi akumulasi likuiditas (5-6 Front-Run) dan Scam Wick Reclaim.
-        3. **Macro Gate:** Memvalidasi apakah aset sedang berada di fase kapitulasi (Bear Market) sebelum mengizinkan eksekusi grid.
-        """)
