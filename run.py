@@ -66,6 +66,30 @@ def _load_grades():
     except Exception:
         return {}
 
+def _driver_series(data):
+    """Map already-loaded feeds → the driver matrix's SEMANTIC ids. Only the ones we can verify get
+    wired; everything else stays absent → NO_DATA (honest). FRED + prices are already fetched — the
+    matrix was simply never handed them (it ran on None). This is that missing wire, nothing fabricated."""
+    import pandas as pd
+    fred = data.get("fred") or {}
+    px = {}
+    for m in ("_proxy", "fx", "commodity", "us"):
+        px.update((data.get("prices", {}) or {}).get(m, {}) or {})
+    out = {}
+    if fred.get("DFII10") is not None: out["TIPS10Y"] = fred["DFII10"]              # real 10Y (TIPS)
+    if fred.get("BAMLH0A0HYM2") is not None: out["HY_OAS"] = fred["BAMLH0A0HYM2"]   # HY credit spread
+    try:  # Fed net liquidity = balance sheet − TGA − RRP
+        w, t, r = fred.get("WALCL"), fred.get("WTREGEN"), fred.get("RRPONTSYD")
+        if w is not None and t is not None and r is not None:
+            df = pd.concat([pd.Series(w), pd.Series(t), pd.Series(r)], axis=1).ffill().dropna()
+            if len(df) > 40: out["FEDLIQ"] = df.iloc[:, 0] - df.iloc[:, 1] - df.iloc[:, 2]
+    except Exception:
+        pass
+    for k in ("DX-Y.NYB", "UUP"):                                                   # dollar index (real price)
+        if px.get(k) is not None: out["DXY"] = px[k]; break
+    return out
+
+
 def build_desk(data, top_per_market=12):
     import pandas as _pd
     def _c1d(x):
@@ -138,7 +162,7 @@ def build_desk(data, top_per_market=12):
     short_rows = rk.get("master_short", [])
     spot_rows = rk.get("master_spot", [])
     eliminated = {e.get("ticker"): e.get("reason", "eliminated") for e in rk.get("eliminated", []) if isinstance(e, dict)}
-    bias = market_bias(None)  # driver matrix map (readings None without feeds → honest)
+    bias = market_bias(_driver_series(data))  # driver matrix now fed real FRED+price series (unmapped drivers → NO_DATA, honest)
 
     markets = {}
     _MKDEF = {"label": None, "long_only": False, "drivers": []}
@@ -195,6 +219,7 @@ def build_desk(data, top_per_market=12):
             "sources": data["sources"], "fred_source": data["fred_source"],
             "universe_n": len(union),
             "note": disc["summary"].get("note", ""),
+            "feeds_status": (data.get("feeds") or {}).get("_status", {}),   # per-feed: snapshot / live / absent
         },
         "systemic": systemic,
         "regime_tf": _regime_tf,
@@ -203,6 +228,7 @@ def build_desk(data, top_per_market=12):
         "markets": markets,
         "alpha": alpha,
         "desk_picks": out.get("final_desk", {}),
+        "feeds": {k: v for k, v in (data.get("feeds") or {}).items() if k != "_status"},  # onchain/cot/gex/finra when present
     }
 
 

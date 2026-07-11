@@ -97,7 +97,58 @@ def load_fred(allow_live=True):
     return {}, "OFFLINE (no FRED — liquidity uses price proxy)"
 
 
-def load_all(markets=None, start="2022-01-01", allow_live=True):
+def _load_feeds(allow_live=True, fetch_live=False):
+    """Specialized flow feeds (on-chain / COT / GEX / dark-pool) that otherwise leave metrics gated.
+    PRIMARY path: read data/feeds_snapshot.pkl — build it once on a networked machine (build_feeds.py),
+    commit it; the deploy then reads it, which also sidesteps Yahoo blocking datacenter IPs on Cloud.
+    OPT-IN live path (fetch_live=True): best-effort direct fetch; each wrapped so a failure just leaves
+    that feed empty — never crashes, never blocks. Returns {feed: value, "_status": {feed: how}}."""
+    import os, pickle
+    feeds, status = {}, {}
+    snap = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "feeds_snapshot.pkl")
+    try:
+        if os.path.exists(snap):
+            with open(snap, "rb") as f:
+                snapd = pickle.load(f) or {}
+            for k in ("onchain", "cot", "gex", "finra", "typef", "fx_carry"):
+                if snapd.get(k):
+                    feeds[k] = snapd[k]; status[k] = f"snapshot · {snapd.get('_saved_at', '?')}"
+        else:
+            status["_snapshot"] = "absent (run build_feeds.py on a networked machine, commit the .pkl)"
+    except Exception as e:
+        status["_snapshot_error"] = f"{type(e).__name__}: {e}"
+    if allow_live and fetch_live:
+        def _try(k, fn):
+            if feeds.get(k):
+                return
+            try:
+                v = fn()
+                if v:
+                    feeds[k] = v; status[k] = "live"
+                else:
+                    status[k] = "live · empty"
+            except Exception as e:
+                status[k] = f"live failed · {type(e).__name__}"
+        def _oc():
+            from engines.live_data_engine import fetch_onchain_defillama
+            return fetch_onchain_defillama({"BTC-USD": "bitcoin", "ETH-USD": "ethereum", "SOL-USD": "solana"})
+        def _cot():
+            from engines.cftc_cot_scraper import get_all_signals
+            return get_all_signals()
+        def _finra():
+            from engines.live_data_engine import fetch_finra_short_volume
+            return fetch_finra_short_volume(["NVDA", "AMD", "AVGO", "MRVL", "MU", "MSFT", "META", "AAPL"], lookback_days=20)
+        def _gex():
+            from engines.live_data_engine import fetch_options_yf
+            return {"source": "yfinance",
+                    "data": fetch_options_yf(["NVDA", "AMD", "AVGO", "MRVL", "MU", "SMH", "MSFT", "META", "AAPL", "AMZN"],
+                                             max_tickers=10, max_workers=4)}
+        _try("onchain", _oc); _try("cot", _cot); _try("finra", _finra); _try("gex", _gex)
+    feeds["_status"] = status
+    return feeds
+
+
+def load_all(markets=None, start="2022-01-01", allow_live=True, fetch_live_feeds=False):
     """Use v40's PROVEN live loaders (data.loader.load_prices + data.fred_loader.load_fred_series) —
     the exact path that fetches FRED+Yahoo live for you in v40. Falls back to warroom.data then
     synthetic only if those are unavailable. In this sandbox the network is blocked, so it falls back;
@@ -211,11 +262,13 @@ def load_all(markets=None, start="2022-01-01", allow_live=True):
     bench = prices.get("us", {}).get(BENCH)
     if bench is None:
         bp, _ = load_prices([BENCH], start, allow_live); bench = bp.get(BENCH)
+    # ---- specialized flow feeds (on-chain / COT / GEX / dark-pool) → un-gate the metrics ----
+    feeds = _load_feeds(allow_live=allow_live, fetch_live=fetch_live_feeds)
     live = v40_ok or (len(fred) > 5)
     return {"prices": prices, "ohlcv": ohlcv, "bench": bench, "fred": fred, "vix": vix,
             "sources": sources, "bench_source": "v40" if v40_ok else "fallback", "fred_source": fsrc,
             "overall_source": "LIVE" if live else "SYNTHETIC", "markets": markets,
-            "treasury_liquidity": _liq, "proxies": proxies}
+            "treasury_liquidity": _liq, "proxies": proxies, "feeds": feeds}
 
 
 
