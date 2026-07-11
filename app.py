@@ -24,20 +24,16 @@ binance = ccxt.binance()
 @st.cache_data(ttl=3600) # Cache 1 jam biar gak spam API Binance
 def get_top_crypto(limit=100):
     try:
-        # Fetch semua ticker di Binance
         tickers = binance.fetch_tickers()
-        # Filter hanya pair USDT dan bukan leveraged token (UP/DOWN/BULL/BEAR)
         usdt_pairs = {
             symbol: data.get('quoteVolume', 0) 
             for symbol, data in tickers.items() 
             if symbol.endswith('/USDT') and 'UP/USDT' not in symbol and 'DOWN/USDT' not in symbol 
             and 'BULL/USDT' not in symbol and 'BEAR/USDT' not in symbol
         }
-        # Urutkan berdasarkan volume terbesar, ambil top 'limit'
         top_symbols = sorted(usdt_pairs, key=usdt_pairs.get, reverse=True)[:limit]
         return top_symbols
     except:
-        # Fallback kalau API Binance sibuk
         return ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT']
 
 # Daftar Forex & Commodities yang udah di-filter
@@ -57,7 +53,7 @@ ASSET_UNIVERSE = {
 }
 
 # ==========================================
-# 3. DATA FETCHING ENGINES
+# 3. DATA FETCHING ENGINES (FORCE LATEST)
 # ==========================================
 def fetch_binance_data(symbol, days=120):
     try:
@@ -73,7 +69,11 @@ def fetch_binance_data(symbol, days=120):
 
 def fetch_yahoo_data(symbol, days=120):
     try:
-        df = yf.download(symbol, period=f"{days}d", interval='1d', progress=False, auto_adjust=True)
+        # FORCE LATEST DATA: Pakai start dan end eksplisit sampai hari ini
+        end_date = datetime.today() + timedelta(days=1)
+        start_date = end_date - timedelta(days=days)
+        
+        df = yf.download(symbol, start=start_date, end=end_date, interval='1d', progress=False, auto_adjust=True)
         if df.empty: return None
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
@@ -87,7 +87,6 @@ def fetch_yahoo_data(symbol, days=120):
 def check_macro_gate(symbol, current_price, df):
     if df.empty: return False
         
-    # Jika Crypto (Binance), cek koreksi > 40% dari ATH 90 hari
     if '/USDT' in symbol:
         if len(df) > 90:
             high_90d = df['High'].rolling(90).max().iloc[-1]
@@ -96,8 +95,6 @@ def check_macro_gate(symbol, current_price, df):
             
         if pd.isna(high_90d) or high_90d == 0: return False
         return current_price < (high_90d * 0.60)
-    
-    # Jika Forex/Commodities, cek koreksi > 15% dari ATH 90 hari (Volatilitas forex lebih rendah)
     else:
         if len(df) > 90:
             high_90d = df['High'].rolling(90).max().iloc[-1]
@@ -163,7 +160,7 @@ def scan_asset(ticker, market_type, anchor_window, front_run_pct, min_front_runs
             'Ticker': ticker,
             'Market': market_type.split(' ')[0],
             'Status': status,
-            'Anchor Price': round(float(anchor_low), 6), # 6 desimal buat ada altcoin harga 0.0001
+            'Anchor Price': round(float(anchor_low), 6),
             'Front-Runs': int(front_run_count),
             'Last Close': round(float(last_close), 6),
             'Distance (%)': round(float(((last_close - anchor_low) / anchor_low) * 100), 2),
@@ -224,8 +221,10 @@ if st.sidebar.button("Start Scanning", type="primary", use_container_width=True)
     if not tickers_to_scan:
         st.warning("Silakan pilih minimal 1 market atau input ticker manual.")
     else:
+        # TANGGAL & JAM REAL-TIME SAAT SCAN DIJALANKAN
+        scan_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         st.write(f"### Memindai {len(tickers_to_scan)} aset...")
-        st.caption("Tunggu sebentar, fetch data 100+ aset memakan waktu sekitar 1-2 menit.")
+        st.caption(f"⏱️ Scan executed at: {scan_time} | Data diambil real-time dari API Binance & Yahoo Finance.")
         
         progress_bar = st.progress(0)
         status_text = st.empty()
